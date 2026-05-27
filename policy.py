@@ -269,23 +269,23 @@ def _ensure_script_line(
         has_back = re.search(r"\b(back|bag|pack)\b", lower) is not None
         if has_coke and has_back:
             return cleaned
-        suffix = "Grab a Coke from my back first, then I will take your instant photo."
+        instruction = "Grab a Coke from my back first, then I will take your instant photo."
     elif interaction_phase == "confirm_bottle" and state == "wait_for_bottle":
         has_coke = _mentions_coke_container(lower)
         has_frame = re.search(r"\b(frame|camera|photo|front|center|hold|show)\b", lower) is not None
         if has_coke and has_frame:
             return cleaned
-        suffix = "Hold the Coke can out front and center yourself in the camera frame."
+        instruction = "Hold the Coke can out front and center yourself in the camera frame."
     else:
         has_coke = _mentions_coke_container(lower)
         has_cue = re.search(r"\b(cheers|cheese|camera|photo|frame)\b", lower) is not None
         if has_coke and has_cue:
             return cleaned
-        suffix = "Hold the Coke up front and center. Cheers."
+        instruction = "Hold the Coke up front and center. Cheers."
 
     if not cleaned:
-        return suffix
-    return f"{cleaned.rstrip('.!?')}. {suffix}"
+        return instruction
+    return f"{instruction} {cleaned}"
 
 
 def _cmd_for_target(bearing: Bearing, range_estimate: RangeEstimate) -> dict[str, float]:

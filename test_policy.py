@@ -135,6 +135,22 @@ def test_greet_line_tells_person_to_take_coke_from_back() -> None:
     assert "instant photo" in decision["line"]
 
 
+def test_long_greet_line_keeps_coke_from_back_instruction() -> None:
+    raw = _raw_decision()
+    raw["line"] = (
+        "That bright white shirt and big storytelling stance make you look like "
+        "the official master of ceremonies for this entire room, and honestly the "
+        "robot dog has never seen more confidence near a kitchen island."
+    )
+
+    decision = policy._normalize_decision(raw, policy.FetchPolicyConfig())
+
+    assert decision["state"] == "greet"
+    assert "Coke" in decision["line"]
+    assert "back" in decision["line"]
+    assert "instant photo" in decision["line"]
+
+
 def test_photo_coaching_line_mentions_coke_and_frame() -> None:
     raw = _raw_decision()
     raw["line"] = "Scoot a little left so the camera can see you."
