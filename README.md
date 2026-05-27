@@ -7,11 +7,15 @@ WebSocket, and the server returns motion/speech/photo decisions.
 
 ## Behavior
 
-1. Patrol/search for an available person. The stricter beach-chair/towel/lying-down filter is intentionally deferred for easier testing.
-2. Reject people who appear busy, holding a phone, holding a drink, reading, or working.
-3. Approach only if the path looks safe.
-4. Stop once the target is within 4 meters.
-5. Wave and say a short friendly beach-context line that offers a drink, an instant photo, or both.
+1. Run the robot preflight: recovery stand, balance stand, and joystick handoff.
+2. Search for a happy or relaxed beachgoer who is lying down or reclining.
+3. Reject people who appear busy, holding a phone, holding a drink, reading, working, or using a laptop/tablet.
+4. Approach only if the path looks safe.
+5. Stop once the target is within 4 meters.
+6. Wave and say a personalized joke based on visible, non-sensitive appearance/context.
+7. Offer a Coke/drink in exchange for an instant photo.
+8. Wait until the person is holding the bottle and both the person and bottle are well framed.
+9. Say a cheese cue, save the photo, and trigger a dance.
 
 The prototype does not infer identity or sensitive traits. Humor is constrained to
 visible beach context such as hats, sunglasses, towels, heat, shade, and posture.
@@ -28,6 +32,18 @@ For Record3D USB RGBD input:
 ```bash
 cd /Users/seifip/GitHub/fetch/dimos
 python -m dimos.experimental.fetch.iphone_middleware --host 0.0.0.0 --port 8455 --record3d
+```
+
+For a live Go2 on the dog Wi-Fi:
+
+```bash
+cd /Users/seifip/GitHub/fetch/dimos
+python -m dimos.experimental.fetch.iphone_middleware \
+  --host 0.0.0.0 \
+  --port 8455 \
+  --record3d \
+  --robot-ip 192.168.12.1 \
+  --robot-connection-method local_ap
 ```
 
 Open this on the iPhone or Mac:
@@ -54,6 +70,9 @@ The adapter exposes:
 - `GET /record3d/stream-depth.mjpg`
 - `POST /record3d/restart`
 - `POST /record3d/analyze`
+- `POST /photos/save`
+- `POST /robot/preflight`
+- `POST /robot/action`
 
 Record3D frames are analyzed with the RGB image plus a `depth_hint` containing
 center-depth and near-object summaries in meters. The default vision model is
@@ -90,7 +109,16 @@ center-depth and near-object summaries in meters. The default vision model is
     "angular_z": 0.0,
     "duration_s": 0.9
   },
-  "line": "Your towel has reached vacation mode. Cold drink, instant photo, or both?"
+  "action": "wave_offer",
+  "photo_ready": false,
+  "bottle_visible": false,
+  "framing": {
+    "person_visible": true,
+    "bottle_visible": false,
+    "well_framed": false,
+    "notes": ""
+  },
+  "line": "Your pink umbrella is doing heroic shade work. Want a Coke for one instant photo?"
 }
 ```
 

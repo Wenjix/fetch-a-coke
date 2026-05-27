@@ -17,7 +17,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
+from datetime import datetime
 from pathlib import Path
+import time
 from typing import Any
 
 from dotenv import load_dotenv
@@ -25,9 +28,13 @@ from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
+from unitree_webrtc_connect.constants import RTC_TOPIC
 
 from dimos.experimental.fetch.policy import FetchPolicy, FetchPolicyConfig
 from dimos.experimental.fetch.record3d_source import Record3DSource
+from dimos.msgs.geometry_msgs.Twist import Twist
+from dimos.msgs.geometry_msgs.Vector3 import Vector3
+from dimos.robot.unitree.connection import UnitreeWebRTCConnection
 from dimos.utils.logging_config import setup_logger
 from dimos.utils.path_utils import get_project_root
 from dimos.web.dimos_interface.api.server import FastAPIServer
@@ -35,6 +42,7 @@ from dimos.web.dimos_interface.api.server import FastAPIServer
 logger = setup_logger()
 
 STATIC_DIR = Path(__file__).parent / "static"
+CAPTURE_DIR = STATIC_DIR / "captures"
 DEFAULT_PORT = 8455
 
 
@@ -50,11 +58,15 @@ class FetchIphoneMiddleware:
         tts_voice: str = "echo",
         record3d: bool = False,
         record3d_device_index: int = 0,
+        robot_ip: str | None = None,
+        robot_connection_method: str = "local_ap",
     ) -> None:
         self.host = host
         self.port = port
         self.tts_model = tts_model
         self.tts_voice = tts_voice
+        self.robot_ip = robot_ip
+        self.robot_connection_method = robot_connection_method
         self.policy = FetchPolicy(FetchPolicyConfig(model=model))
         self.server = FastAPIServer(
             dev_name="Fetch iPhone Middleware",
@@ -65,6 +77,22 @@ class FetchIphoneMiddleware:
         self._openai_client = OpenAI()
         self._record3d_source = Record3DSource(record3d_device_index) if record3d else None
         self._setup_routes()
+
+    def _with_robot(self, callback: Any) -> Any:
+        if not self.robot_ip:
+            return {"enabled": False, "ok": False, "message": "Robot IP is not configured"}
+        conn = UnitreeWebRTCConnection(self.robot_ip, connection_method=self.robot_connection_method)
+        try:
+            return callback(conn)
+        finally:
+            conn.stop()
+
+    @staticmethod
+    def _sport(conn: UnitreeWebRTCConnection, api_id: int, parameter: dict[str, Any] | None = None) -> Any:
+        payload: dict[str, Any] = {"api_id": api_id}
+        if parameter is not None:
+            payload["parameter"] = parameter
+        return conn.publish_request(RTC_TOPIC["SPORT_MOD"], payload)
 
     def _setup_routes(self) -> None:
         self.server.app.router.routes = [
@@ -81,7 +109,50 @@ class FetchIphoneMiddleware:
 
         @self.server.app.get("/health")
         async def health() -> dict[str, Any]:
-            return {"ok": True, "service": "fetch-iphone", "port": self.port}
+            return {
+                "ok": True,
+                "service": "fetch-iphone",
+                "port": self.port,
+                "robot_enabled": bool(self.robot_ip),
+            }
+
+        @self.server.app.post("/robot/preflight")
+        async def robot_preflight() -> Any:
+            def run(conn: UnitreeWebRTCConnection) -> dict[str, Any]:
+                responses = {
+                    "recovery_stand": self._sport(conn, 1006),
+                }
+                time.sleep(2.0)
+                responses["balance_stand"] = self._sport(conn, 1002)
+                time.sleep(0.6)
+                responses["switch_joystick"] = self._sport(conn, 1027, {"data": True})
+                return {"enabled": True, "ok": True, "responses": responses}
+
+            return await asyncio.to_thread(self._with_robot, run)
+
+        @self.server.app.post("/robot/action")
+        async def robot_action(payload: dict[str, Any]) -> Any:
+            action = str(payload.get("action") or "").strip()
+
+            def run(conn: UnitreeWebRTCConnection) -> dict[str, Any]:
+                if action == "move":
+                    linear_x = float(payload.get("linear_x") or 0.0)
+                    angular_z = float(payload.get("angular_z") or 0.0)
+                    duration_s = max(0.0, min(2.0, float(payload.get("duration_s") or 0.0)))
+                    twist = Twist(
+                        linear=Vector3(linear_x, 0.0, 0.0),
+                        angular=Vector3(0.0, 0.0, angular_z),
+                    )
+                    return {"enabled": True, "ok": conn.move(twist, duration=duration_s)}
+                if action == "wave":
+                    return {"enabled": True, "ok": True, "response": self._sport(conn, 1016)}
+                if action == "dance":
+                    return {"enabled": True, "ok": True, "response": self._sport(conn, 1022)}
+                if action == "stand":
+                    return {"enabled": True, "ok": True, "response": self._sport(conn, 1002)}
+                return {"enabled": True, "ok": False, "message": f"Unknown robot action {action!r}"}
+
+            return await asyncio.to_thread(self._with_robot, run)
 
         @self.server.app.get("/record3d/status")
         async def record3d_status() -> dict[str, Any]:
@@ -149,17 +220,48 @@ class FetchIphoneMiddleware:
             return stream_record3d_jpegs("depth_jpeg_bytes")
 
         @self.server.app.post("/record3d/analyze")
-        async def record3d_analyze() -> Any:
+        async def record3d_analyze(payload: dict[str, Any] | None = None) -> Any:
             if self._record3d_source is None:
                 return JSONResponse({"error": "Record3D is not enabled"}, status_code=404)
             frame = self._record3d_source.latest()
             if frame is None:
                 return JSONResponse({"error": "No Record3D frame received yet"}, status_code=404)
+            interaction_phase = str((payload or {}).get("interaction_phase") or "find_guest")
             return await asyncio.to_thread(
                 self.policy.analyze_frame,
                 frame.image_data_url,
                 frame.depth_hint,
+                interaction_phase,
             )
+
+        @self.server.app.post("/photos/save")
+        async def save_photo(payload: dict[str, Any]) -> Any:
+            image_bytes: bytes | None = None
+            image_data_url = str(payload.get("image_data_url") or "")
+
+            if image_data_url:
+                try:
+                    _, encoded = image_data_url.split(",", 1)
+                    image_bytes = base64.b64decode(encoded)
+                except (ValueError, base64.binascii.Error):
+                    return JSONResponse({"error": "Invalid image_data_url"}, status_code=400)
+            elif self._record3d_source is not None:
+                frame = self._record3d_source.latest()
+                if frame is not None:
+                    image_bytes = frame.jpeg_bytes
+
+            if image_bytes is None:
+                return JSONResponse({"error": "No image available to save"}, status_code=404)
+
+            CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+            filename = f"fetch-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.jpg"
+            path = CAPTURE_DIR / filename
+            path.write_bytes(image_bytes)
+            return {
+                "saved": True,
+                "url": f"/fetch/static/captures/{filename}",
+                "path": str(path),
+            }
 
         @self.server.app.post("/speak")
         async def speak(payload: dict[str, Any]) -> Response:
@@ -215,6 +317,7 @@ class FetchIphoneMiddleware:
                             self.policy.analyze_frame,
                             frame.image_data_url,
                             frame.depth_hint,
+                            str(message.get("interaction_phase") or "find_guest"),
                         )
                         decision["frame_id"] = message.get("frame_id")
                         decision["record3d"] = self._record3d_source.status()
@@ -233,6 +336,7 @@ class FetchIphoneMiddleware:
                         self.policy.analyze_frame,
                         image_data_url,
                         depth_hint if isinstance(depth_hint, dict) else None,
+                        str(message.get("interaction_phase") or "find_guest"),
                     )
                     decision["frame_id"] = message.get("frame_id")
                     await ws.send_json(decision)
@@ -264,6 +368,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--tts-voice", default="echo", help="OpenAI TTS voice.")
     parser.add_argument("--record3d", action="store_true", help="Read RGBD frames from Record3D over USB.")
     parser.add_argument("--record3d-device-index", type=int, default=0, help="Record3D device index.")
+    parser.add_argument("--robot-ip", default=None, help="Optional live Unitree Go2 IP for Fetch actions.")
+    parser.add_argument(
+        "--robot-connection-method",
+        default="local_ap",
+        help="Unitree WebRTC connection method: auto, local_ap, or local_sta.",
+    )
     parser.add_argument("--no-ssl", action="store_true", help="Disable HTTPS for local debugging.")
     return parser.parse_args()
 
@@ -280,6 +390,8 @@ def main() -> None:
         tts_voice=args.tts_voice,
         record3d=args.record3d,
         record3d_device_index=args.record3d_device_index,
+        robot_ip=args.robot_ip,
+        robot_connection_method=args.robot_connection_method,
     )
     scheme = "http" if args.no_ssl else "https"
     logger.info(f"Fetch iPhone middleware running at {scheme}://{args.host}:{args.port}/fetch")

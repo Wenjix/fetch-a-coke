@@ -688,6 +688,36 @@
         }
       }
 
+      body.dancing .reticle {
+        animation: dance-bounce 280ms ease-in-out alternate infinite;
+      }
+
+      body.dancing .video-shell {
+        animation: dance-glow 480ms ease-in-out alternate infinite;
+      }
+
+      @keyframes dance-bounce {
+        from {
+          scale: 1;
+          rotate: -2deg;
+        }
+        to {
+          scale: 1.08;
+          rotate: 2deg;
+        }
+      }
+
+      @keyframes dance-glow {
+        from {
+          box-shadow: var(--shadow);
+        }
+        to {
+          box-shadow:
+            var(--shadow),
+            0 0 42px color-mix(in oklch, var(--pink) 34%, transparent);
+        }
+      }
+
       .feed-corners {
         position: absolute;
         inset: 14px;
@@ -1875,11 +1905,16 @@
         ws: null,
         stream: null,
         scanning: false,
+        workflow: "find_guest",
         useRecord3d: false,
         pendingFrame: false,
+        speaking: false,
+        photoInProgress: false,
         frameId: 0,
         lastDecisionAt: 0,
         lastLine: "",
+        lastGreetAt: 0,
+        lastPhotoAt: 0,
         timer: null,
         statusTimer: null,
         lastRecord3dFrames: 0,
@@ -1910,6 +1945,14 @@
       function setScanPending(pending) {
         state.pendingFrame = pending;
         document.body.classList.toggle("scan-pending", pending);
+      }
+
+      function setWorkflow(workflow, message) {
+        state.workflow = workflow;
+        if (message) {
+          els.line.textContent = message;
+        }
+        log(`workflow ${workflow}`);
       }
 
       async function startCamera() {
@@ -1989,6 +2032,7 @@
             JSON.stringify({
               type: "record3d_frame",
               frame_id: state.frameId,
+              interaction_phase: state.workflow,
               ts: Date.now(),
             }),
           );
@@ -2006,12 +2050,13 @@
             frame_id: state.frameId,
             image: captureDataUrl(),
             depth_hint: null,
+            interaction_phase: state.workflow,
             ts: Date.now(),
           }),
         );
       }
 
-      function handleMessage(message) {
+      async function handleMessage(message) {
         if (message.type === "hello") {
           log(`model ${message.model}`);
           return;
@@ -2033,6 +2078,14 @@
 
         const cmd = message.simulated_cmd_vel || {};
         els.motion.textContent = `cmd ${(cmd.linear_x || 0).toFixed(2)} / ${(cmd.angular_z || 0).toFixed(2)}`;
+        if (message.state === "approach") {
+          robotAction({
+            action: "move",
+            linear_x: cmd.linear_x || 0,
+            angular_z: cmd.angular_z || 0,
+            duration_s: cmd.duration_s || 0,
+          });
+        }
         els.decisionState.textContent = message.state || "unknown";
         const target = message.target || {};
         els.target.textContent = `${target.bearing || "unknown"}, ${target.range || "unknown"}: ${target.description || "none"}`;
@@ -2045,18 +2098,79 @@
         if (message.line) {
           els.line.textContent = message.line;
         }
-        log(`${message.state}: ${message.notes || ""}`);
+        log(`${message.state}/${message.action || "none"}: ${message.notes || ""}`);
         if (message.record3d) {
           log(`record3d frames ${message.record3d.frames_received || 0}`);
         }
 
-        if (message.state === "greet" && message.line) {
-          state.lastLine = message.line;
-          snapPhoto();
-          log("photo snapped");
-          speak(message.line)
-            .then(() => log("spoke joke and offer"))
-            .catch((err) => log(`speech ${err.message}`));
+        if (message.state === "greet" && message.line && state.workflow === "find_guest") {
+          await beginOffer(message);
+          return;
+        }
+
+        if (
+          (message.state === "photo_ready" || message.action === "take_photo_dance") &&
+          state.workflow === "confirm_bottle"
+        ) {
+          await completePhoto(message);
+          return;
+        }
+
+        if (message.state === "wait_for_bottle" && message.line && state.workflow === "confirm_bottle") {
+          await speakOnce(message.line, "coached photo pose");
+        }
+      }
+
+      async function beginOffer(message) {
+        const now = Date.now();
+        if (now - state.lastGreetAt < 12000 || state.speaking) {
+          return;
+        }
+        state.lastGreetAt = now;
+        state.lastLine = message.line;
+        els.motion.textContent = "wave";
+        await robotAction({ action: "wave" });
+        log("wave and Coke-for-photo offer");
+        await speakOnce(message.line, "spoke joke and offer");
+        setWorkflow("confirm_bottle", "Waiting for the person holding the Coke bottle in frame.");
+      }
+
+      async function completePhoto(message) {
+        const now = Date.now();
+        if (now - state.lastPhotoAt < 10000 || state.photoInProgress) {
+          return;
+        }
+        state.lastPhotoAt = now;
+        state.photoInProgress = true;
+        try {
+          const line = message.line || "Perfect. Hold the Coke up. Cheese.";
+          els.line.textContent = line;
+          await speakOnce(line, "spoke cheese cue");
+          await snapPhoto();
+          dance();
+          await robotAction({ action: "dance" });
+          log("photo saved; dance triggered");
+          await sleep(2500);
+          setWorkflow("find_guest", "Photo saved. Looking for the next relaxed beachgoer.");
+        } finally {
+          state.photoInProgress = false;
+        }
+      }
+
+      async function speakOnce(text, successLog) {
+        if (!text || state.speaking) {
+          return;
+        }
+        state.speaking = true;
+        try {
+          await speak(text);
+          if (successLog) {
+            log(successLog);
+          }
+        } catch (err) {
+          log(`speech ${err.message}`);
+        } finally {
+          state.speaking = false;
         }
       }
 
@@ -2079,23 +2193,79 @@
         await els.audio.play();
       }
 
-      function snapPhoto() {
+      async function savePhoto(payload) {
+        const response = await fetch("/photos/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          throw new Error(`save photo ${response.status}`);
+        }
+        return response.json();
+      }
+
+      async function snapPhoto() {
         if (state.useRecord3d) {
-          const url = `/record3d/latest.jpg?ts=${Date.now()}`;
+          const saved = await savePhoto({ source: "record3d" });
+          const url = `${saved.url}?ts=${Date.now()}`;
           els.photoPreview.src = url;
           els.downloadLink.href = url;
           els.downloadLink.hidden = false;
-          log("record3d photo linked");
+          log(`record3d photo saved ${saved.path || ""}`);
           return;
         }
         if (!els.video.videoWidth) {
           return;
         }
         const dataUrl = captureDataUrl(1024);
-        els.photoPreview.src = dataUrl;
-        els.downloadLink.href = dataUrl;
+        const saved = await savePhoto({ image_data_url: dataUrl });
+        const url = `${saved.url}?ts=${Date.now()}`;
+        els.photoPreview.src = url;
+        els.downloadLink.href = url;
         els.downloadLink.hidden = false;
-        log("photo captured");
+        log(`photo saved ${saved.path || ""}`);
+      }
+
+      function dance() {
+        document.body.classList.add("dancing");
+        els.motion.textContent = "dance";
+        window.setTimeout(() => document.body.classList.remove("dancing"), 1800);
+      }
+
+      async function robotAction(payload) {
+        try {
+          const response = await fetch("/robot/action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const result = await response.json();
+          if (result.enabled === false) {
+            return result;
+          }
+          log(`robot ${payload.action}: ${result.ok ? "ok" : result.message || "failed"}`);
+          return result;
+        } catch (err) {
+          log(`robot ${payload.action} ${err.message}`);
+          return { ok: false };
+        }
+      }
+
+      async function robotPreflight() {
+        try {
+          const response = await fetch("/robot/preflight", { method: "POST" });
+          const result = await response.json();
+          if (result.enabled === false) {
+            log("robot preflight skipped");
+            return result;
+          }
+          log(`robot preflight: ${result.ok ? "ok" : "failed"}`);
+          return result;
+        } catch (err) {
+          log(`robot preflight ${err.message}`);
+          return { ok: false };
+        }
       }
 
       function refreshRecord3dPreview() {
@@ -2213,11 +2383,14 @@
       async function startAutomation() {
         await enableRecord3d();
         await ensureRecord3dReady();
+        await robotPreflight();
         if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
           connect();
         }
         state.scanning = true;
+        state.workflow = "find_guest";
         setRunningUi(true);
+        els.line.textContent = "Standing up, balancing, then looking for a relaxed beachgoer.";
         log("auto scan started: every 10s");
         sendFrame();
         if (state.timer) {
@@ -2228,6 +2401,7 @@
 
       function stopAutomation() {
         state.scanning = false;
+        state.workflow = "find_guest";
         setScanPending(false);
         setRecord3dMode(false);
         if (state.timer) {

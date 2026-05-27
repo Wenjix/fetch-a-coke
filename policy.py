@@ -22,7 +22,8 @@ from typing import Any, Literal
 
 from openai import OpenAI
 
-ApproachState = Literal["search", "approach", "greet", "skip"]
+ApproachState = Literal["search", "approach", "greet", "wait_for_bottle", "photo_ready", "skip"]
+InteractionPhase = Literal["find_guest", "confirm_bottle"]
 Bearing = Literal["left", "center", "right", "unknown"]
 RangeEstimate = Literal["far", "medium", "near", "inside_4m", "inside_1m", "unknown"]
 
@@ -53,6 +54,15 @@ def _default_decision(reason: str) -> dict[str, Any]:
         "offer": {
             "drink": True,
             "photo": True,
+        },
+        "action": "search",
+        "photo_ready": False,
+        "bottle_visible": False,
+        "framing": {
+            "person_visible": False,
+            "bottle_visible": False,
+            "well_framed": False,
+            "notes": "",
         },
         "line": "",
         "simulated_cmd_vel": {
@@ -116,22 +126,36 @@ def _cmd_for_target(bearing: Bearing, range_estimate: RangeEstimate) -> dict[str
     return {"linear_x": linear_x, "angular_z": angular_z, "duration_s": duration_s}
 
 
-def _normalize_decision(raw: dict[str, Any], config: FetchPolicyConfig) -> dict[str, Any]:
+def _normalize_decision(
+    raw: dict[str, Any],
+    config: FetchPolicyConfig,
+    interaction_phase: InteractionPhase = "find_guest",
+) -> dict[str, Any]:
     candidate_found = bool(raw.get("candidate_found"))
     confidence = float(raw.get("confidence") or 0.0)
     target = raw.get("target") if isinstance(raw.get("target"), dict) else {}
     safety = raw.get("safety") if isinstance(raw.get("safety"), dict) else {}
     offer = raw.get("offer") if isinstance(raw.get("offer"), dict) else {}
+    framing = raw.get("framing") if isinstance(raw.get("framing"), dict) else {}
 
     bearing = _as_bearing(target.get("bearing"))
     range_estimate = _as_range(target.get("range"))
     safe_to_approach = bool(safety.get("safe_to_approach"))
+    photo_ready = bool(raw.get("photo_ready") or framing.get("well_framed"))
+    bottle_visible = bool(raw.get("bottle_visible") or framing.get("bottle_visible"))
     line = str(raw.get("line") or "").strip()
 
     if len(line) > config.max_line_chars:
         line = line[: config.max_line_chars].rsplit(" ", 1)[0].rstrip(".,;:") + "."
 
-    if not candidate_found:
+    if interaction_phase == "confirm_bottle":
+        if photo_ready:
+            state: ApproachState = "photo_ready"
+        elif candidate_found:
+            state = "wait_for_bottle"
+        else:
+            state = "search"
+    elif not candidate_found:
         state: ApproachState = "search"
     elif not safe_to_approach:
         state = "skip"
@@ -140,16 +164,26 @@ def _normalize_decision(raw: dict[str, Any], config: FetchPolicyConfig) -> dict[
     else:
         state = "approach"
 
-    if state != "greet":
+    if state not in {"greet", "photo_ready", "wait_for_bottle"}:
         line = ""
 
     cmd = _cmd_for_target(bearing, range_estimate) if state == "approach" else _default_decision("")["simulated_cmd_vel"]
-    if state == "greet":
+    if state in {"greet", "wait_for_bottle", "photo_ready"}:
         cmd = {"linear_x": 0.0, "angular_z": 0.0, "duration_s": 0.0}
+
+    action_by_state = {
+        "search": "search",
+        "approach": "approach",
+        "greet": "wave_offer",
+        "wait_for_bottle": "coach_photo",
+        "photo_ready": "take_photo_dance",
+        "skip": "skip",
+    }
 
     return {
         "type": "decision",
         "state": state,
+        "action": str(raw.get("action") or action_by_state[state]),
         "candidate_found": candidate_found,
         "confidence": max(0.0, min(1.0, confidence)),
         "target": {
@@ -157,6 +191,8 @@ def _normalize_decision(raw: dict[str, Any], config: FetchPolicyConfig) -> dict[
             "range": range_estimate,
             "description": str(target.get("description") or ""),
             "free_hand_evidence": str(target.get("free_hand_evidence") or ""),
+            "lying_evidence": str(target.get("lying_evidence") or ""),
+            "happy_evidence": str(target.get("happy_evidence") or ""),
             "busy_signals": list(target.get("busy_signals") or []),
         },
         "safety": {
@@ -166,6 +202,14 @@ def _normalize_decision(raw: dict[str, Any], config: FetchPolicyConfig) -> dict[
         "offer": {
             "drink": bool(offer.get("drink", True)),
             "photo": bool(offer.get("photo", True)),
+        },
+        "photo_ready": photo_ready,
+        "bottle_visible": bottle_visible,
+        "framing": {
+            "person_visible": bool(framing.get("person_visible", candidate_found)),
+            "bottle_visible": bottle_visible,
+            "well_framed": photo_ready,
+            "notes": str(framing.get("notes") or ""),
         },
         "line": line,
         "simulated_cmd_vel": cmd,
@@ -180,7 +224,12 @@ class FetchPolicy:
         self.config = config or FetchPolicyConfig()
         self._client = OpenAI()
 
-    def analyze_frame(self, image_data_url: str, depth_hint: dict[str, Any] | None = None) -> dict[str, Any]:
+    def analyze_frame(
+        self,
+        image_data_url: str,
+        depth_hint: dict[str, Any] | None = None,
+        interaction_phase: InteractionPhase = "find_guest",
+    ) -> dict[str, Any]:
         if not os.getenv("OPENAI_API_KEY"):
             return _default_decision("OPENAI_API_KEY is not set")
 
@@ -191,14 +240,31 @@ class FetchPolicy:
         if depth_hint:
             depth_note = f"Depth hint from client: {json.dumps(depth_hint, sort_keys=True)}"
 
+        if interaction_phase == "confirm_bottle":
+            goal = """
+Current phase: confirm_bottle.
+- The dog has already waved and offered a Coke in exchange for an instant photo.
+- Look for the same or primary person holding a Coke bottle, soda bottle, or clearly bottle-shaped drink from the dog's bag.
+- The person and bottle must both be visible and well framed for a photo. Prefer head/upper body plus bottle in frame; reject if the bottle is cropped out, hidden, or too blurry.
+- If ready, set photo_ready true, action "take_photo_dance", and line to a short direction ending with "cheese" or similar.
+- If the person is visible but the bottle is missing or framing is bad, set candidate_found true, photo_ready false, action "coach_photo", and line to one short positioning instruction.
+"""
+        else:
+            goal = """
+Current phase: find_guest.
+- Find one visible beachgoer who looks happy or relaxed and is lying down or reclining on a beach towel, sand, lounger, or beach chair.
+- Reject people who are working, reading, holding a phone, holding a drink, using a laptop/tablet, actively eating, or otherwise busy.
+- Prefer someone with hands free and an open posture.
+- The dog should approach only if the path looks safe, then stop within a few meters.
+- Generate the greeting only when the target is inside 4 meters.
+- The greeting must wave, make a highly personalized joke from visible non-sensitive appearance/context, and offer a Coke/drink in exchange for an instant photo.
+"""
+
         prompt = f"""
 You are the behavior policy for a small robot dog Fetch.
 
 Goal:
-- Prototype mode: find one visible human who appears available. Do not require them to be lying down, sitting, or on a beach chair/towel yet.
-- They must appear available: no phone in hand, no drink in hand, no book/tablet/laptop, not working, not reading, not already drinking.
-- Prefer someone with hands free.
-- Generate the greeting only when the target is inside 4 meters.
+{goal}
 
 Safety and privacy:
 - Do not identify people or infer sensitive traits.
@@ -216,6 +282,8 @@ Return only JSON with this shape:
     "range": "far|medium|near|inside_4m|inside_1m|unknown",
     "description": "short visible description",
     "free_hand_evidence": "why hands seem free",
+    "lying_evidence": "why they appear lying down or reclining",
+    "happy_evidence": "why they appear relaxed or happy",
     "busy_signals": ["phone", "drink", "book", "work", "none"]
   }},
   "safety": {{
@@ -226,7 +294,16 @@ Return only JSON with this shape:
     "drink": true,
     "photo": true
   }},
-  "line": "one short funny friendly line the dog can say after it is within 4m; it must reference visible context",
+  "action": "search|approach|wave_offer|coach_photo|take_photo_dance|skip",
+  "photo_ready": false,
+  "bottle_visible": false,
+  "framing": {{
+    "person_visible": true,
+    "bottle_visible": false,
+    "well_framed": false,
+    "notes": "short framing notes"
+  }},
+  "line": "one short dog line; it must reference visible context and the current phase",
   "notes": "short reasoning"
 }}
 
@@ -254,4 +331,4 @@ Range rule:
         )
         content = response.choices[0].message.content or "{}"
         parsed = _extract_json_object(content)
-        return _normalize_decision(parsed, self.config)
+        return _normalize_decision(parsed, self.config, interaction_phase)
