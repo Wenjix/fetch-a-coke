@@ -1969,7 +1969,8 @@
     </main>
 
     <canvas id="canvas" hidden></canvas>
-    <audio id="audio"></audio>
+    <audio id="audio" playsinline></audio>
+    <audio id="printAudio" preload="auto" playsinline src="/fetch/static/audio/freesound_community-polaroid_600-83252.mp3"></audio>
 
     <script>
       const els = {
@@ -1995,9 +1996,11 @@
         downloadLink: document.getElementById("downloadLink"),
         log: document.getElementById("log"),
         audio: document.getElementById("audio"),
+        printAudio: document.getElementById("printAudio"),
       };
 
       const DOG_PLACEHOLDER_SRC = "/fetch/static/idle-camera-feed.png";
+      const PRINT_SOUND_SRC = "/fetch/static/audio/freesound_community-polaroid_600-83252.mp3";
       const SCAN_INTERVAL_MS = 1000;
 
       const state = {
@@ -2325,13 +2328,16 @@
           await speakOnce(line, "spoke cheese cue");
           await snapPhoto();
           await playPrintSound();
-          const doneLine = "Photo is done. You can pick it up from my head.";
+          const doneLine = "Photo is done. You can pick it up from my head. I'll do a little dance now.";
           els.line.textContent = doneLine;
           await speakOnce(doneLine, "spoke photo pickup cue");
           dance();
           await robotAction({ action: "dance" });
           log("photo saved; dance triggered");
           await sleep(2500);
+          const byeLine = "Thanks for hanging out. Bye.";
+          els.line.textContent = byeLine;
+          await speakOnce(byeLine, "spoke goodbye");
           setWorkflow("find_guest", "Photo saved. Looking for the next good Coke/photo target.");
         } finally {
           state.photoInProgress = false;
@@ -2649,13 +2655,28 @@
           }
         }
 
-        const response = await fetch("/speak", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        });
+        let response;
+        try {
+          response = await fetch("/speak", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+        } catch (err) {
+          log(`speech ${err.message}; using browser voice`);
+          await speakBrowserFallback(text);
+          return;
+        }
         if (!response.ok) {
-          log(`speech ${response.status}`);
+          let detail = `${response.status}`;
+          try {
+            const body = await response.json();
+            detail = body.error || detail;
+          } catch {
+            detail = `${response.status}`;
+          }
+          log(`speech ${detail}; using browser voice`);
+          await speakBrowserFallback(text);
           return;
         }
         const blob = await response.blob();
@@ -2665,80 +2686,72 @@
         }
         els.audio.srcObject = null;
         els.audio.src = url;
-        await els.audio.play();
+        try {
+          await els.audio.play();
+          await waitForAudioEnded(els.audio);
+        } catch (err) {
+          log(`speech playback ${err.message}; using browser voice`);
+          await speakBrowserFallback(text);
+        }
       }
 
-      function getAudioContext() {
-        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextCtor) {
-          return null;
+      async function speakBrowserFallback(text) {
+        if (!("speechSynthesis" in window) || !window.SpeechSynthesisUtterance) {
+          log("browser voice unavailable");
+          return;
         }
-        if (!state.audioContext) {
-          state.audioContext = new AudioContextCtor();
-        }
-        return state.audioContext;
+        await new Promise((resolve) => {
+          const utterance = new SpeechSynthesisUtterance(text);
+          let settled = false;
+          const finish = () => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            window.clearTimeout(timeout);
+            resolve();
+          };
+          const timeout = window.setTimeout(finish, Math.max(5000, text.length * 120));
+          utterance.rate = 0.95;
+          utterance.pitch = 1.05;
+          utterance.onend = finish;
+          utterance.onerror = finish;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utterance);
+        });
+      }
+
+      function waitForAudioEnded(audio, timeoutMs = 20000) {
+        return new Promise((resolve) => {
+          let settled = false;
+          const finish = () => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            window.clearTimeout(timeout);
+            audio.removeEventListener("ended", finish);
+            audio.removeEventListener("error", finish);
+            resolve();
+          };
+          const timeout = window.setTimeout(finish, timeoutMs);
+          audio.addEventListener("ended", finish);
+          audio.addEventListener("error", finish);
+        });
       }
 
       async function playPrintSound() {
-        const context = getAudioContext();
-        if (!context) {
-          return;
+        const audio = els.printAudio || new Audio(PRINT_SOUND_SRC);
+        audio.pause();
+        audio.currentTime = 0;
+        audio.volume = 0.9;
+        try {
+          await audio.play();
+          log("camera print sound");
+          await waitForAudioEnded(audio, 4000);
+        } catch (err) {
+          log(`print sound ${err.message}`);
         }
-        if (context.state === "suspended") {
-          await context.resume();
-        }
-
-        const start = context.currentTime + 0.03;
-        const master = context.createGain();
-        master.gain.setValueAtTime(0.0001, start);
-        master.gain.exponentialRampToValueAtTime(0.32, start + 0.015);
-        master.gain.exponentialRampToValueAtTime(0.0001, start + 1.15);
-        master.connect(context.destination);
-
-        const click = context.createOscillator();
-        const clickGain = context.createGain();
-        click.type = "square";
-        click.frequency.setValueAtTime(920, start);
-        click.frequency.exponentialRampToValueAtTime(190, start + 0.08);
-        clickGain.gain.setValueAtTime(0.45, start);
-        clickGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.11);
-        click.connect(clickGain).connect(master);
-        click.start(start);
-        click.stop(start + 0.12);
-
-        for (let index = 0; index < 8; index += 1) {
-          const tickStart = start + 0.18 + index * 0.085;
-          const tick = context.createOscillator();
-          const tickGain = context.createGain();
-          tick.type = "triangle";
-          tick.frequency.setValueAtTime(index % 2 ? 105 : 130, tickStart);
-          tickGain.gain.setValueAtTime(0.16, tickStart);
-          tickGain.gain.exponentialRampToValueAtTime(0.0001, tickStart + 0.055);
-          tick.connect(tickGain).connect(master);
-          tick.start(tickStart);
-          tick.stop(tickStart + 0.06);
-        }
-
-        const noiseBuffer = context.createBuffer(1, context.sampleRate * 0.72, context.sampleRate);
-        const data = noiseBuffer.getChannelData(0);
-        for (let index = 0; index < data.length; index += 1) {
-          data[index] = (Math.random() * 2 - 1) * (1 - index / data.length);
-        }
-        const noise = context.createBufferSource();
-        const noiseFilter = context.createBiquadFilter();
-        const noiseGain = context.createGain();
-        noise.buffer = noiseBuffer;
-        noiseFilter.type = "bandpass";
-        noiseFilter.frequency.setValueAtTime(620, start + 0.16);
-        noiseFilter.Q.setValueAtTime(0.8, start + 0.16);
-        noiseGain.gain.setValueAtTime(0.07, start + 0.16);
-        noiseGain.gain.exponentialRampToValueAtTime(0.0001, start + 1.05);
-        noise.connect(noiseFilter).connect(noiseGain).connect(master);
-        noise.start(start + 0.16);
-        noise.stop(start + 1.08);
-
-        log("camera print sound");
-        await sleep(1180);
       }
 
       async function savePhoto(payload) {
