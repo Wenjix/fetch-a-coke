@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import ClassVar
 from unittest.mock import AsyncMock, patch
 import base64
 import sys
@@ -124,6 +126,19 @@ _module("unitree_webrtc_connect.constants", RTC_TOPIC={"SPORT_MOD": "sport"})
 import iphone_middleware
 
 
+_LOOP = None
+
+
+def _run(coro):
+    """Run a coroutine on a single reused loop, left set as current, so this
+    module never closes/clears the loop that sibling test modules rely on."""
+    global _LOOP
+    if _LOOP is None or _LOOP.is_closed():
+        _LOOP = asyncio.new_event_loop()
+    asyncio.set_event_loop(_LOOP)
+    return _LOOP.run_until_complete(coro)
+
+
 def test_realtime_session_config_defaults() -> None:
     session = iphone_middleware._build_realtime_session_config(
         model=iphone_middleware.DEFAULT_REALTIME_MODEL,
@@ -218,6 +233,29 @@ def test_cli_defaults_to_fast_openai_tts(monkeypatch) -> None:
     assert args.tts_model == "tts-1"
 
 
+def test_hello_conversation_enabled() -> None:
+    middleware = iphone_middleware.FetchIphoneMiddleware(
+        conversation_mode="gemini_live",
+    )
+
+    with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
+        hello = ws.receive_json()
+
+    assert hello["conversation_enabled"] is True
+    assert hello["audio_route"] == "gemini_live_conversation"
+    assert hello["conversation_model"] == tts.DEFAULT_GEMINI_TTS_MODEL
+
+
+def test_hello_conversation_disabled_by_default() -> None:
+    middleware = iphone_middleware.FetchIphoneMiddleware()
+
+    with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
+        hello = ws.receive_json()
+
+    assert hello["conversation_enabled"] is False
+    assert hello["audio_route"] == "speak"
+
+
 def test_hello_advertises_gemini_speak_route() -> None:
     middleware = iphone_middleware.FetchIphoneMiddleware(
         tts_provider="gemini",
@@ -244,6 +282,181 @@ def test_hello_advertises_openai_realtime_when_enabled() -> None:
     assert hello["tts_provider"] == "openai"
     assert hello["audio_route"] == "realtime_then_speak"
     assert hello["realtime_enabled"] is True
+
+
+class _FakeConversationSession:
+    instances: ClassVar[list["_FakeConversationSession"]] = []
+
+    def __init__(self, **kwargs: object) -> None:
+        self.kwargs = kwargs
+        self.opened = False
+        self.closed = False
+        self.mic: list[bytes] = []
+        self.finished = False
+        self._run = asyncio.Event()
+        _FakeConversationSession.instances.append(self)
+
+    async def open(self) -> None:
+        self.opened = True
+
+    async def run(self) -> None:
+        await self._run.wait()
+
+    async def close(self) -> None:
+        self.closed = True
+        self._run.set()
+
+    def push_mic(self, pcm: bytes) -> None:
+        self.mic.append(pcm)
+
+
+def test_conversation_start_opens_session() -> None:
+    _FakeConversationSession.instances = []
+    middleware = iphone_middleware.FetchIphoneMiddleware(conversation_mode="gemini_live")
+
+    with patch("iphone_middleware.LiveConversationSession", _FakeConversationSession):
+        with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
+            ws.receive_json()  # hello
+            ws.send_json({"type": "conversation_start", "context": "nice straw hat"})
+            state = ws.receive_json()
+
+    assert state["type"] == "conversation_state"
+    assert state["state"] == "active"
+    assert len(_FakeConversationSession.instances) == 1
+    session = _FakeConversationSession.instances[0]
+    assert session.opened is True
+    assert session.kwargs["system_context"] == "nice straw hat"
+    assert session.kwargs["model"] == tts.DEFAULT_GEMINI_TTS_MODEL
+
+
+def test_mic_chunk_forwarded_to_session() -> None:
+    _FakeConversationSession.instances = []
+    middleware = iphone_middleware.FetchIphoneMiddleware(conversation_mode="gemini_live")
+
+    with patch("iphone_middleware.LiveConversationSession", _FakeConversationSession):
+        with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
+            ws.receive_json()  # hello
+            ws.send_json({"type": "conversation_start", "context": ""})
+            ws.receive_json()  # conversation_state active
+            ws.send_json({"type": "mic_chunk", "data": "aGVsbG8="})
+            ws.send_json({"type": "conversation_stop"})
+
+    session = _FakeConversationSession.instances[0]
+    assert session.mic == [b"hello"]
+    assert session.closed is True
+
+
+def test_hello_advertises_provider_availability(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    middleware = iphone_middleware.FetchIphoneMiddleware()
+
+    with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
+        hello = ws.receive_json()
+
+    assert hello["openai_available"] is True
+    assert hello["gemini_available"] is True
+
+
+def test_hello_reports_missing_keys(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("GOOGLE_API_KEY", "google-key")
+    middleware = iphone_middleware.FetchIphoneMiddleware()
+
+    with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
+        hello = ws.receive_json()
+
+    assert hello["openai_available"] is False
+    assert hello["gemini_available"] is True  # GOOGLE_API_KEY counts as Gemini
+
+
+def test_conversation_start_forwards_voice_and_model() -> None:
+    _FakeConversationSession.instances = []
+    middleware = iphone_middleware.FetchIphoneMiddleware(conversation_mode="gemini_live")
+
+    with patch("iphone_middleware.LiveConversationSession", _FakeConversationSession):
+        with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
+            ws.receive_json()  # hello
+            ws.send_json({
+                "type": "conversation_start",
+                "context": "hi",
+                "voice": "nova",
+                "model": "gemini-2.5-flash-native-audio-preview-12-2025",
+            })
+            ws.receive_json()  # conversation_state active
+
+    session = _FakeConversationSession.instances[0]
+    assert session.kwargs["voice"] == "nova"
+    assert session.kwargs["model"] == "gemini-2.5-flash-native-audio-preview-12-2025"
+
+
+def test_speak_provider_override_to_openai(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    middleware = iphone_middleware.FetchIphoneMiddleware(tts_provider="gemini", tts_voice="echo")
+    gemini_tts = AsyncMock(return_value=b"RIFF")
+
+    with (
+        patch("iphone_middleware.gemini_live_tts", new=gemini_tts),
+        patch("iphone_middleware.OpenAI") as openai_cls,
+    ):
+        openai_client = openai_cls.return_value
+        openai_client.audio.speech.create.return_value = SimpleNamespace(content=b"mp3bytes")
+        response = TestClient(middleware.server.app).post(
+            "/speak", json={"text": "hi", "provider": "openai", "voice": "nova"}
+        )
+
+    gemini_tts.assert_not_awaited()
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/mpeg"
+    assert openai_client.audio.speech.create.call_args.kwargs["voice"] == "nova"
+
+
+def test_speak_provider_override_to_gemini(monkeypatch) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    middleware = iphone_middleware.FetchIphoneMiddleware(tts_provider="openai", tts_voice="echo")
+    gemini_tts = AsyncMock(return_value=b"RIFFwav")
+
+    with (
+        patch("iphone_middleware.gemini_live_tts", new=gemini_tts),
+        patch("iphone_middleware.OpenAI") as openai_cls,
+    ):
+        response = TestClient(middleware.server.app).post(
+            "/speak", json={"text": "hi", "provider": "gemini", "voice": "echo"}
+        )
+
+    openai_cls.assert_not_called()
+    gemini_tts.assert_awaited_once_with("hi", voice="Charon")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/wav"
+
+
+def test_route_frame_safe_swallows_errors_and_notifies_client() -> None:
+    middleware = iphone_middleware.FetchIphoneMiddleware()
+    sent: list[dict] = []
+
+    async def send_json(message: dict) -> None:
+        sent.append(message)
+
+    async def boom(*_args: object, **_kwargs: object) -> dict:
+        raise RuntimeError("analyze boom")
+
+    middleware._analyze_message = boom  # type: ignore[assignment]
+    _run(middleware._route_frame_safe(send_json, {"type": "frame"}, "frame"))
+
+    assert any(m.get("type") == "error" for m in sent)
+
+
+def test_conversation_start_rejected_when_disabled() -> None:
+    middleware = iphone_middleware.FetchIphoneMiddleware()
+
+    with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
+        ws.receive_json()  # hello
+        ws.send_json({"type": "conversation_start", "context": ""})
+        message = ws.receive_json()
+
+    assert message["type"] == "error"
+    assert "disabled" in message["message"]
 
 
 def test_speak_uses_gemini_tts_without_openai_client(monkeypatch) -> None:

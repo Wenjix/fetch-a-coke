@@ -2209,6 +2209,202 @@
           transition-duration: 0.01ms !important;
         }
       }
+      .audio-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--space-md);
+      }
+      .audio-modal[hidden] {
+        display: none;
+      }
+      .audio-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: oklch(8% 0.014 175 / 0.62);
+        animation: audio-fade 160ms ease-out;
+      }
+      .audio-modal-card {
+        position: relative;
+        width: min(440px, 100%);
+        max-height: calc(100dvh - 2 * var(--space-md));
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+        padding: var(--space-lg);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        animation: audio-rise 180ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .audio-modal-head {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .audio-modal-title {
+        margin: 0;
+        font-family: var(--font-display);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: var(--ink);
+      }
+      .audio-modal-sub {
+        margin: 0;
+        font-size: 13px;
+        color: var(--faint);
+      }
+      .audio-group-label {
+        display: block;
+        margin-bottom: var(--space-xs);
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .audio-modes {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+        border: 0;
+        margin: 0;
+        padding: 0;
+      }
+      .audio-mode {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: var(--space-sm);
+        min-height: 56px;
+        padding: var(--space-sm) var(--space-md);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: color-mix(in oklch, var(--panel-strong) 55%, transparent);
+        cursor: pointer;
+        transition: border-color 160ms ease-out, background 160ms ease-out;
+      }
+      .audio-mode:hover:not(.disabled) {
+        border-color: var(--line-strong);
+        background: var(--panel-strong);
+      }
+      .audio-mode:has(input:checked) {
+        border-color: color-mix(in oklch, var(--accent) 70%, var(--line));
+        background: color-mix(in oklch, var(--accent) 14%, var(--panel-strong));
+      }
+      .audio-mode:has(input:focus-visible) {
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 30%, transparent);
+      }
+      .audio-mode.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .audio-mode input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+      }
+      .audio-mode-body {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+      }
+      .audio-mode-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--ink);
+      }
+      .audio-mode-desc {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .audio-status {
+        font-family: var(--font-display);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+      .audio-status[data-ready="true"] {
+        color: var(--ok);
+        background: color-mix(in oklch, var(--ok) 16%, transparent);
+      }
+      .audio-status[data-ready="false"] {
+        color: var(--amber);
+        background: color-mix(in oklch, var(--amber) 14%, transparent);
+      }
+      .audio-fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-md);
+      }
+      .audio-field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+        min-width: 0;
+      }
+      .audio-field-label {
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .audio-field select {
+        width: 100%;
+        min-height: 44px;
+        padding: 0 var(--space-sm);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel-strong);
+        color: var(--ink);
+        font-family: var(--font-body);
+        font-size: 14px;
+      }
+      .audio-field select:hover:not(:disabled) {
+        border-color: var(--line-strong);
+      }
+      .audio-field.disabled {
+        opacity: 0.5;
+      }
+      .audio-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: var(--space-sm);
+        margin-top: var(--space-xs);
+      }
+      @keyframes audio-fade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes audio-rise {
+        from { opacity: 0; transform: translateY(8px) scale(0.98); }
+        to { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .audio-modal-backdrop,
+        .audio-modal-card {
+          animation: none;
+        }
+      }
+      @media (max-width: 480px) {
+        .audio-fields {
+          grid-template-columns: 1fr;
+        }
+      }
     </style>
   </head>
   <body>
@@ -2217,6 +2413,7 @@
         <img class="brand-logo" src="/fetch/static/logo.png" alt="Fetch" />
       </div>
       <div class="header-metrics" aria-label="Recording controls">
+        <button id="audioSettings" class="bp5-button" type="button">Audio</button>
         <button id="recordToggle" class="bp5-button record-toggle" data-running="false">Record</button>
       </div>
     </header>
@@ -2282,6 +2479,72 @@
       </aside>
     </main>
 
+    <div id="audioModal" class="audio-modal" hidden role="dialog" aria-modal="true" aria-labelledby="audioModalTitle">
+      <div class="audio-modal-backdrop" data-close="1"></div>
+      <div class="audio-modal-card">
+        <div class="audio-modal-head">
+          <h2 id="audioModalTitle" class="audio-modal-title">Voice &amp; model</h2>
+          <p class="audio-modal-sub">How Fetch talks to people during an interaction.</p>
+        </div>
+
+        <div>
+          <span class="audio-group-label" id="audioModeLabel">Mode</span>
+          <div class="audio-modes" role="radiogroup" aria-labelledby="audioModeLabel">
+            <label class="audio-mode" data-mode="live">
+              <input type="radio" name="audioMode" value="live" />
+              <span class="audio-mode-body">
+                <span class="audio-mode-name">Live conversation</span>
+                <span class="audio-mode-desc">Two-way voice: jokes, takes the order, photo</span>
+              </span>
+              <span class="audio-status" data-mode-status="live" data-ready="true">Ready</span>
+            </label>
+            <label class="audio-mode" data-mode="gemini_tts">
+              <input type="radio" name="audioMode" value="gemini_tts" />
+              <span class="audio-mode-body">
+                <span class="audio-mode-name">Gemini TTS</span>
+                <span class="audio-mode-desc">One-way spoken lines, Gemini voice</span>
+              </span>
+              <span class="audio-status" data-mode-status="gemini_tts" data-ready="true">Ready</span>
+            </label>
+            <label class="audio-mode" data-mode="openai_tts">
+              <input type="radio" name="audioMode" value="openai_tts" />
+              <span class="audio-mode-body">
+                <span class="audio-mode-name">OpenAI TTS</span>
+                <span class="audio-mode-desc">One-way spoken lines, OpenAI voice</span>
+              </span>
+              <span class="audio-status" data-mode-status="openai_tts" data-ready="true">Ready</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="audio-fields">
+          <label class="audio-field">
+            <span class="audio-field-label">Voice</span>
+            <select id="audioVoice">
+              <option value="alloy">Alloy</option>
+              <option value="echo">Echo</option>
+              <option value="fable">Fable</option>
+              <option value="onyx">Onyx</option>
+              <option value="nova">Nova</option>
+              <option value="shimmer">Shimmer</option>
+            </select>
+          </label>
+          <label class="audio-field" id="audioModelField">
+            <span class="audio-field-label">Live model</span>
+            <select id="audioLiveModel">
+              <option value="gemini-3.1-flash-live-preview">gemini-3.1-flash-live-preview</option>
+              <option value="gemini-2.5-flash-native-audio-preview-12-2025">gemini-2.5-flash-native-audio</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="audio-modal-actions">
+          <button id="audioCancel" class="bp5-button" type="button" data-close="1">Cancel</button>
+          <button id="audioSave" class="bp5-button primary" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+
     <canvas id="canvas" hidden></canvas>
     <audio id="audio" playsinline></audio>
     <audio id="printAudio" preload="auto" playsinline src="/fetch/static/audio/freesound_community-polaroid_600-83252.mp3"></audio>
@@ -2289,6 +2552,11 @@
     <script>
       const els = {
         recordToggle: document.getElementById("recordToggle"),
+        audioSettings: document.getElementById("audioSettings"),
+        audioModal: document.getElementById("audioModal"),
+        audioVoice: document.getElementById("audioVoice"),
+        audioLiveModel: document.getElementById("audioLiveModel"),
+        audioSave: document.getElementById("audioSave"),
         video: document.getElementById("video"),
         canvas: document.getElementById("canvas"),
         frameRate: document.getElementById("frameRate"),
@@ -2346,10 +2614,32 @@
         ttsProvider: "openai",
         audioRoute: "speak",
         realtimeAvailable: false,
+        conversationEnabled: false,
+        conversationActive: false,
+        micStream: null,
+        micSource: null,
+        micWorkletNode: null,
+        micScriptNode: null,
+        playbackSampleRate: 24000,
+        playbackTime: 0,
+        playbackSources: [],
+        echoGate: false,
+        echoSuppress: false,
+        lastConvFrameAt: 0,
+        audioMode: "",
+        voice: "echo",
+        liveModel: "gemini-3.1-flash-live-preview",
+        liveModelExplicit: false,
+        openaiAvailable: false,
+        geminiAvailable: false,
+        audioModalOpener: null,
       };
 
       const REALTIME_CLIENT_SECRET_TIMEOUT_MS = 5000;
       const REALTIME_SDP_TIMEOUT_MS = 8000;
+      const MIC_TARGET_RATE = 16000;
+      const CONV_FRAME_INTERVAL_MS = 2500;
+      const AUDIO_MODES = ["live", "gemini_tts", "openai_tts"];
 
       function setStatus(text) {
         state.transportStatus = text;
@@ -2508,6 +2798,9 @@
           setScanPending(false);
           setRunningUi(false);
           closeRealtimeVoiceSession();
+          if (state.conversationActive) {
+            endConversation(false);
+          }
           log("socket closed");
         };
         state.ws.onerror = () => {
@@ -2539,6 +2832,13 @@
         }
         if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
           return;
+        }
+        if (state.conversationActive) {
+          const nowTs = Date.now();
+          if (nowTs - state.lastConvFrameAt < CONV_FRAME_INTERVAL_MS) {
+            return;
+          }
+          state.lastConvFrameAt = nowTs;
         }
         if (state.visionSource === "dog") {
           if (!state.dogCameraStreaming || state.lastDogFrames === 0) {
@@ -2598,10 +2898,35 @@
           state.ttsProvider = message.tts_provider || "openai";
           state.audioRoute = message.audio_route || "speak";
           state.realtimeAvailable = Boolean(message.realtime_enabled);
+          state.conversationEnabled = Boolean(message.conversation_enabled);
+          state.openaiAvailable = Boolean(message.openai_available);
+          state.geminiAvailable = Boolean(message.gemini_available);
+          // Honor the server's --conversation-model unless the user picked one.
+          if (!state.liveModelExplicit && message.conversation_model) {
+            state.liveModel = message.conversation_model;
+          }
+          reconcileAudioMode();
+          refreshAudioModal();
           if (state.audioRoute !== "realtime_then_speak") {
             closeRealtimeVoiceSession();
           }
-          log(`vision ${message.vision_provider || "openai"} ${message.model}; audio ${state.audioRoute}`);
+          log(`vision ${message.vision_provider || "openai"} ${message.model}; audio ${state.audioRoute}; mode ${state.audioMode}`);
+          return;
+        }
+        if (message.type === "audio_out") {
+          handleAudioOut(message);
+          return;
+        }
+        if (message.type === "transcript") {
+          handleTranscript(message);
+          return;
+        }
+        if (message.type === "interrupted") {
+          handleInterrupted();
+          return;
+        }
+        if (message.type === "conversation_state") {
+          await handleConversationState(message);
           return;
         }
         if (message.type === "error") {
@@ -2624,7 +2949,7 @@
 
         const cmd = message.simulated_cmd_vel || {};
         els.motion.textContent = `cmd ${(cmd.linear_x || 0).toFixed(2)} / ${(cmd.angular_z || 0).toFixed(2)}`;
-        if (shouldExecuteRobotMove(message, cmd)) {
+        if (shouldExecuteRobotMove(message, cmd) && !state.conversationActive) {
           robotAction({
             action: "move",
             linear_x: cmd.linear_x || 0,
@@ -2647,6 +2972,13 @@
         }
         if (message.record3d) {
           log(`record3d frames ${message.record3d.frames_received || 0}`);
+        }
+
+        if (state.conversationActive) {
+          // The live conversation owns audio, motion, and the photo; vision
+          // frames during a conversation are framing hints only (already sent
+          // to the live session by the server).
+          return;
         }
 
         if (message.state === "greet" && message.line && state.workflow === "find_guest") {
@@ -2675,7 +3007,26 @@
         state.lastGreetAt = now;
         state.lastLine = message.line;
         els.motion.textContent = "wave";
-        robotAction({ action: "wave" });
+        await robotAction({ action: "wave" });
+        if (state.audioMode === "live" && state.conversationEnabled) {
+          await startMic();
+          if (state.micStream) {
+            state.conversationActive = true;
+            state.lastConvFrameAt = Date.now();
+            setWorkflow("confirm_bottle", "Live conversation: taking the order and photo.");
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+              state.ws.send(JSON.stringify({
+                type: "conversation_start",
+                context: message.line,
+                voice: state.voice,
+                model: state.liveModel,
+              }));
+            }
+            log("live conversation started");
+            return;
+          }
+          log("mic unavailable; using scripted offer");
+        }
         log("wave and Coke-for-photo offer");
         await speakOnce(message.line, "spoke joke and offer");
         setWorkflow("confirm_bottle", "Hold that Coke up for me. I’m lining up the shot.");
@@ -3008,6 +3359,163 @@
         );
       }
 
+      function ttsProviderFor(mode) {
+        return mode === "openai_tts" ? "openai" : "gemini";
+      }
+
+      function audioModeLabel(mode) {
+        if (mode === "live") return "Live";
+        if (mode === "openai_tts") return "OpenAI TTS";
+        return "Gemini TTS";
+      }
+
+      function loadAudioSettings() {
+        try {
+          const mode = localStorage.getItem("fetch.audioMode");
+          const voice = localStorage.getItem("fetch.voice");
+          const liveModel = localStorage.getItem("fetch.liveModel");
+          if (mode && AUDIO_MODES.includes(mode)) state.audioMode = mode;
+          if (voice) state.voice = voice;
+          if (liveModel) {
+            state.liveModel = liveModel;
+            state.liveModelExplicit = true; // a stored value is an explicit user choice
+          }
+        } catch {}
+      }
+
+      function persistAudioSettings() {
+        try {
+          localStorage.setItem("fetch.audioMode", state.audioMode);
+          localStorage.setItem("fetch.voice", state.voice);
+          localStorage.setItem("fetch.liveModel", state.liveModel);
+        } catch {}
+      }
+
+      function audioModeStatus(mode) {
+        // {available, label} per mode. Live needs the conversation flag AND a
+        // Gemini key; each TTS route needs its own provider key. The label tells
+        // the user exactly what is missing rather than just greying the row out.
+        if (mode === "live") {
+          if (!state.conversationEnabled) return { available: false, label: "Server flag off" };
+          if (!state.geminiAvailable) return { available: false, label: "Needs Gemini key" };
+          return { available: true, label: "Ready" };
+        }
+        if (mode === "gemini_tts") {
+          return state.geminiAvailable
+            ? { available: true, label: "Ready" }
+            : { available: false, label: "Needs Gemini key" };
+        }
+        if (mode === "openai_tts") {
+          return state.openaiAvailable
+            ? { available: true, label: "Ready" }
+            : { available: false, label: "Needs OpenAI key" };
+        }
+        return { available: false, label: "Unavailable" };
+      }
+
+      function audioModeAvailable(mode) {
+        return audioModeStatus(mode).available;
+      }
+
+      function defaultAudioMode() {
+        if (state.conversationEnabled && state.geminiAvailable) return "live";
+        if (state.ttsProvider === "openai" && state.openaiAvailable) return "openai_tts";
+        if (state.ttsProvider === "gemini" && state.geminiAvailable) return "gemini_tts";
+        if (state.geminiAvailable) return "gemini_tts";
+        if (state.openaiAvailable) return "openai_tts";
+        return state.ttsProvider === "openai" ? "openai_tts" : "gemini_tts";
+      }
+
+      function reconcileAudioMode() {
+        // Keep a stored choice if it still works; otherwise pick the best mode
+        // whose API key is actually present.
+        if (!AUDIO_MODES.includes(state.audioMode) || !audioModeAvailable(state.audioMode)) {
+          state.audioMode = defaultAudioMode();
+        }
+      }
+
+      function refreshAudioModal() {
+        if (!els.audioModal) return;
+        AUDIO_MODES.forEach((mode) => {
+          const radio = els.audioModal.querySelector(`input[value="${mode}"]`);
+          if (!radio) return;
+          const status = audioModeStatus(mode);
+          radio.disabled = !status.available;
+          const row = radio.closest(".audio-mode");
+          if (row) row.classList.toggle("disabled", !status.available);
+          const badge = els.audioModal.querySelector(`[data-mode-status="${mode}"]`);
+          if (badge) {
+            badge.textContent = status.label;
+            badge.dataset.ready = String(status.available);
+          }
+        });
+        const modeRadio = els.audioModal.querySelector(
+          `input[name="audioMode"][value="${state.audioMode}"]`,
+        );
+        if (modeRadio) modeRadio.checked = true;
+        if (els.audioVoice) els.audioVoice.value = state.voice;
+        // Make sure the active model is selectable even if the server was
+        // launched with a model that isn't one of the built-in options.
+        if (els.audioLiveModel && state.liveModel) {
+          const hasOption = [...els.audioLiveModel.options].some(
+            (opt) => opt.value === state.liveModel,
+          );
+          if (!hasOption) {
+            const opt = document.createElement("option");
+            opt.value = state.liveModel;
+            opt.textContent = state.liveModel;
+            els.audioLiveModel.appendChild(opt);
+          }
+          els.audioLiveModel.value = state.liveModel;
+        }
+        // The live model only matters when Live is usable.
+        const liveReady = audioModeStatus("live").available;
+        const modelField = els.audioModal.querySelector("#audioModelField");
+        if (els.audioLiveModel) els.audioLiveModel.disabled = !liveReady;
+        if (modelField) modelField.classList.toggle("disabled", !liveReady);
+        if (els.audioSettings) {
+          els.audioSettings.textContent = `Audio: ${audioModeLabel(state.audioMode)}`;
+        }
+      }
+
+      function openAudioModal() {
+        refreshAudioModal();
+        state.audioModalOpener = document.activeElement;
+        els.audioModal.hidden = false;
+        const focusTarget =
+          els.audioModal.querySelector('input[name="audioMode"]:checked:not(:disabled)') ||
+          els.audioModal.querySelector('input[name="audioMode"]:not(:disabled)') ||
+          els.audioSave;
+        if (focusTarget) focusTarget.focus();
+      }
+
+      function closeAudioModal() {
+        els.audioModal.hidden = true;
+        if (state.audioModalOpener && typeof state.audioModalOpener.focus === "function") {
+          state.audioModalOpener.focus();
+        }
+        state.audioModalOpener = null;
+      }
+
+      function saveAudioSettings() {
+        const checked = els.audioModal.querySelector('input[name="audioMode"]:checked');
+        const wasLive = state.audioMode === "live";
+        if (checked && AUDIO_MODES.includes(checked.value)) state.audioMode = checked.value;
+        if (els.audioVoice) state.voice = els.audioVoice.value;
+        if (els.audioLiveModel) {
+          state.liveModel = els.audioLiveModel.value;
+          state.liveModelExplicit = true; // user picked a model in the modal
+        }
+        reconcileAudioMode();
+        persistAudioSettings();
+        if (wasLive && state.audioMode !== "live" && state.conversationActive) {
+          endConversation(true);
+        }
+        refreshAudioModal();
+        closeAudioModal();
+        log(`audio mode ${audioModeLabel(state.audioMode)}, voice ${state.voice}`);
+      }
+
       async function speak(text = els.line.textContent) {
         if (!text) {
           return;
@@ -3026,7 +3534,11 @@
           response = await fetch("/speak", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({
+              text,
+              voice: state.voice,
+              provider: ttsProviderFor(state.audioMode),
+            }),
           });
         } catch (err) {
           log(`speech ${err.message}; using browser voice`);
@@ -3161,6 +3673,315 @@
         document.body.classList.add("dancing");
         els.motion.textContent = "dance";
         window.setTimeout(() => document.body.classList.remove("dancing"), 1800);
+      }
+
+      function ensureAudioContext() {
+        if (!state.audioContext) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          state.audioContext = new Ctx();
+        }
+        return state.audioContext;
+      }
+
+      function floatToInt16(input) {
+        const out = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        return out;
+      }
+
+      function downsampleTo16k(input, inRate, outRate) {
+        if (outRate >= inRate) {
+          return floatToInt16(input);
+        }
+        const ratio = inRate / outRate;
+        const newLen = Math.floor(input.length / ratio);
+        const out = new Int16Array(newLen);
+        for (let i = 0; i < newLen; i++) {
+          const start = Math.floor(i * ratio);
+          const end = Math.min(input.length, Math.floor((i + 1) * ratio));
+          let sum = 0;
+          let count = 0;
+          for (let j = start; j < end; j++) {
+            sum += input[j];
+            count += 1;
+          }
+          const sample = count ? sum / count : 0;
+          const s = Math.max(-1, Math.min(1, sample));
+          out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        return out;
+      }
+
+      function int16ToBase64(int16) {
+        const bytes = new Uint8Array(int16.buffer, int16.byteOffset, int16.byteLength);
+        let binary = "";
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        return btoa(binary);
+      }
+
+      function base64ToInt16(b64) {
+        let binary;
+        try {
+          binary = atob(b64 || "");
+        } catch {
+          return new Int16Array(0);
+        }
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return new Int16Array(bytes.buffer, 0, Math.floor(bytes.byteLength / 2));
+      }
+
+      async function startMic() {
+        if (state.micStream) {
+          return;
+        }
+        let micStream = null;
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+            video: false,
+          });
+          // Only mark the mic as ready once capture is actually wired up, so a
+          // failure here leaves state.micStream null and beginOffer falls back
+          // to the scripted offer instead of opening a silent live session.
+          await initMicCapture(micStream);
+          state.micStream = micStream;
+          log("mic ready");
+        } catch (err) {
+          log(`mic ${err.message}`);
+          if (micStream) {
+            micStream.getTracks().forEach((track) => track.stop());
+          }
+          stopMic();
+        }
+      }
+
+      function stopMic() {
+        if (state.micWorkletNode) {
+          try { state.micWorkletNode.disconnect(); } catch {}
+          state.micWorkletNode = null;
+        }
+        if (state.micScriptNode) {
+          try { state.micScriptNode.disconnect(); } catch {}
+          state.micScriptNode = null;
+        }
+        if (state.micSource) {
+          try { state.micSource.disconnect(); } catch {}
+          state.micSource = null;
+        }
+        if (state.micStream) {
+          state.micStream.getTracks().forEach((track) => track.stop());
+          state.micStream = null;
+        }
+      }
+
+      async function initMicCapture(stream) {
+        const ctx = ensureAudioContext();
+        if (ctx.state === "suspended") {
+          try { await ctx.resume(); } catch {}
+        }
+        const source = ctx.createMediaStreamSource(stream);
+        state.micSource = source;
+        const inRate = ctx.sampleRate;
+
+        const sendChunk = (float32) => {
+          if (!state.conversationActive) {
+            return;
+          }
+          if (state.echoSuppress && state.echoGate) {
+            return;
+          }
+          const pcm16 = downsampleTo16k(float32, inRate, MIC_TARGET_RATE);
+          if (!pcm16.length) {
+            return;
+          }
+          if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+            state.ws.send(JSON.stringify({
+              type: "mic_chunk",
+              data: int16ToBase64(pcm16),
+              ts: Date.now(),
+            }));
+          }
+        };
+
+        if (ctx.audioWorklet) {
+          try {
+            const processorCode = `
+              class MicProcessor extends AudioWorkletProcessor {
+                constructor() {
+                  super();
+                  this._chunks = [];
+                  this._count = 0;
+                  this._target = Math.floor(sampleRate * 0.1);
+                }
+                process(inputs) {
+                  const input = inputs[0];
+                  if (input && input[0]) {
+                    this._chunks.push(input[0].slice(0));
+                    this._count += input[0].length;
+                    if (this._count >= this._target) {
+                      const merged = new Float32Array(this._count);
+                      let offset = 0;
+                      for (const chunk of this._chunks) { merged.set(chunk, offset); offset += chunk.length; }
+                      this.port.postMessage(merged);
+                      this._chunks = [];
+                      this._count = 0;
+                    }
+                  }
+                  return true;
+                }
+              }
+              registerProcessor('mic-processor', MicProcessor);
+            `;
+            const blob = new Blob([processorCode], { type: "application/javascript" });
+            const url = URL.createObjectURL(blob);
+            try {
+              await ctx.audioWorklet.addModule(url);
+            } finally {
+              URL.revokeObjectURL(url);
+            }
+            const node = new AudioWorkletNode(ctx, "mic-processor");
+            node.port.onmessage = (event) => sendChunk(event.data);
+            source.connect(node);
+            const sink = ctx.createGain();
+            sink.gain.value = 0;
+            node.connect(sink);
+            sink.connect(ctx.destination);
+            state.micWorkletNode = node;
+            return;
+          } catch (err) {
+            log(`worklet ${err.message}; using fallback capture`);
+          }
+        }
+
+        const node = ctx.createScriptProcessor(4096, 1, 1);
+        node.onaudioprocess = (event) => sendChunk(event.inputBuffer.getChannelData(0));
+        source.connect(node);
+        // Route through a muted gain node: a ScriptProcessor must stay connected
+        // to a destination to keep firing, but we don't want to monitor the mic.
+        const sink = ctx.createGain();
+        sink.gain.value = 0;
+        node.connect(sink);
+        sink.connect(ctx.destination);
+        state.micScriptNode = node;
+      }
+
+      function handleAudioOut(message) {
+        const ctx = ensureAudioContext();
+        if (ctx.state === "suspended") {
+          ctx.resume().catch(() => {});
+        }
+        const int16 = base64ToInt16(message.data || "");
+        if (!int16.length) {
+          return;
+        }
+        const float32 = new Float32Array(int16.length);
+        for (let i = 0; i < int16.length; i++) {
+          float32[i] = int16[i] / 32768;
+        }
+        const buffer = ctx.createBuffer(1, float32.length, state.playbackSampleRate);
+        buffer.copyToChannel(float32, 0);
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(ctx.destination);
+        const now = ctx.currentTime;
+        let startAt = state.playbackTime;
+        if (startAt < now + 0.02) {
+          startAt = now + 0.02;
+        }
+        src.start(startAt);
+        state.playbackTime = startAt + buffer.duration;
+        state.playbackSources.push(src);
+        state.echoGate = true;
+        src.onended = () => {
+          state.playbackSources = state.playbackSources.filter((s) => s !== src);
+          if (state.playbackSources.length === 0) {
+            state.echoGate = false;
+          }
+        };
+      }
+
+      function handleInterrupted() {
+        for (const src of state.playbackSources) {
+          try { src.stop(); } catch {}
+        }
+        state.playbackSources = [];
+        state.playbackTime = 0;
+        state.echoGate = false;
+      }
+
+      function handleTranscript(message) {
+        if (!message.text) {
+          return;
+        }
+        const who = message.speaker === "user" ? "you" : "dog";
+        log(`${who}: ${message.text}`);
+        if (message.speaker === "dog") {
+          els.line.textContent = message.text;
+        }
+      }
+
+      async function handleConversationState(message) {
+        const conversationState = message.state;
+        if (conversationState === "active") {
+          log("conversation active");
+          return;
+        }
+        if (conversationState === "take_photo") {
+          const now = Date.now();
+          if (now - state.lastPhotoAt < 8000 || state.photoInProgress) {
+            return;
+          }
+          state.lastPhotoAt = now;
+          state.photoInProgress = true;
+          try {
+            await snapPhoto();
+            await playPrintSound();
+            log("conversation photo saved");
+          } catch (err) {
+            log(`photo ${err.message}`);
+          } finally {
+            state.photoInProgress = false;
+          }
+          return;
+        }
+        if (conversationState === "celebrate") {
+          dance();
+          log("conversation celebrate");
+          endConversation(false);
+          return;
+        }
+        if (conversationState === "reset") {
+          log(`conversation reset ${(message.data && message.data.reason) || ""}`);
+          endConversation(false);
+          return;
+        }
+      }
+
+      function endConversation(notifyServer = false) {
+        if (notifyServer && state.ws && state.ws.readyState === WebSocket.OPEN) {
+          try { state.ws.send(JSON.stringify({ type: "conversation_stop" })); } catch {}
+        }
+        state.conversationActive = false;
+        stopMic();
+        handleInterrupted();
+        if (state.scanning) {
+          setWorkflow("find_guest", "Looking for the next customer.");
+        } else {
+          state.workflow = "find_guest";
+        }
       }
 
       async function robotAction(payload) {
@@ -3530,6 +4351,9 @@
         state.scanning = false;
         state.workflow = "find_guest";
         setScanPending(false);
+        if (state.conversationActive) {
+          endConversation(true);
+        }
         closeRealtimeVoiceSession();
         if (state.timer) {
           window.clearInterval(state.timer);
@@ -3579,6 +4403,26 @@
         els.photoPreview.removeAttribute("src");
         log("photo unavailable");
       });
+      els.audioSettings.addEventListener("click", openAudioModal);
+      els.audioSave.addEventListener("click", saveAudioSettings);
+      els.audioModal.addEventListener("click", (event) => {
+        if (event.target.dataset && event.target.dataset.close) {
+          closeAudioModal();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !els.audioModal.hidden) {
+          closeAudioModal();
+        }
+      });
+      loadAudioSettings();
+      // Don't reconcile yet: provider availability is unknown until the hello
+      // message arrives, which reconciles against the real keys. Keep any stored
+      // choice (or a provisional default) so we don't clobber it prematurely.
+      if (!AUDIO_MODES.includes(state.audioMode)) {
+        state.audioMode = "gemini_tts";
+      }
+      refreshAudioModal();
       setRunningUi(false);
       init();
     </script>
