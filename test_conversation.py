@@ -8,20 +8,22 @@ from unittest.mock import patch
 import conversation
 
 
-def _run(coro):
-    """Run a coroutine on a dedicated loop and leave a fresh current loop.
+_LOOP: asyncio.AbstractEventLoop | None = None
 
-    asyncio.run() / loop.close() set the current loop to None, which breaks
-    sibling test modules that still use get_event_loop(). Restore a usable
-    loop afterward so test ordering stays robust.
+
+def _run(coro):
+    """Run a coroutine on a single reused module loop.
+
+    A sibling module (test_tts.py) uses asyncio.get_event_loop(), which raises if
+    the current loop was closed/cleared. We keep one loop for this module, reuse
+    it across calls, and leave it set as the current loop so siblings still work
+    without orphaning a loop on every call.
     """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-        asyncio.set_event_loop(asyncio.new_event_loop())
+    global _LOOP
+    if _LOOP is None or _LOOP.is_closed():
+        _LOOP = asyncio.new_event_loop()
+    asyncio.set_event_loop(_LOOP)
+    return _LOOP.run_until_complete(coro)
 
 
 def _make_session(**kwargs):
@@ -117,27 +119,29 @@ def _toolcall_msg(name, args, call_id):
 
 def test_take_order_clamps_quantity_and_skips_hardware() -> None:
     session, _emitted, robot = _make_session()
-    result, scheduling = _run(session._dispatch_tool("take_order", {"quantity": 9}))
+    result, scheduling, finish = _run(session._dispatch_tool("take_order", {"quantity": 9}))
 
     assert result["order_recorded"] is True
     assert result["quantity"] == 4
     assert "back" in result["instructions"]
     assert scheduling == "WHEN_IDLE"
+    assert finish is False
     assert robot == []
 
 
 def test_take_order_defaults_to_one() -> None:
     session, _emitted, _robot = _make_session()
-    result, _ = _run(session._dispatch_tool("take_order", {"quantity": "not a number"}))
+    result, _, _ = _run(session._dispatch_tool("take_order", {"quantity": "not a number"}))
     assert result["quantity"] == 1
 
 
 def test_take_photo_emits_conversation_state() -> None:
     session, emitted, _robot = _make_session()
-    result, scheduling = _run(session._dispatch_tool("take_photo", {}))
+    result, scheduling, finish = _run(session._dispatch_tool("take_photo", {}))
 
     assert result["photo_taken"] is True
     assert scheduling == "WHEN_IDLE"
+    assert finish is False
     assert any(
         m.get("type") == "conversation_state" and m.get("state") == "take_photo"
         for m in emitted
@@ -146,7 +150,7 @@ def test_take_photo_emits_conversation_state() -> None:
 
 def test_do_trick_invokes_robot() -> None:
     session, _emitted, robot = _make_session()
-    result, _ = _run(session._dispatch_tool("do_trick", {"trick": "wave"}))
+    result, _, _ = _run(session._dispatch_tool("do_trick", {"trick": "wave"}))
 
     assert robot == [{"action": "wave"}]
     assert result["performed"] is True
@@ -155,39 +159,77 @@ def test_do_trick_invokes_robot() -> None:
 
 def test_do_trick_rejects_unknown_trick() -> None:
     session, _emitted, robot = _make_session()
-    result, _ = _run(session._dispatch_tool("do_trick", {"trick": "backflip"}))
+    result, _, _ = _run(session._dispatch_tool("do_trick", {"trick": "backflip"}))
 
     assert result["performed"] is False
     assert robot == []
 
 
-def test_celebrate_dances_emits_and_finishes() -> None:
+def test_celebrate_dances_emits_and_signals_finish() -> None:
     session, emitted, robot = _make_session()
-    result, scheduling = _run(session._dispatch_tool("celebrate", {"goodbye_line": "bye"}))
+    result, scheduling, finish = _run(session._dispatch_tool("celebrate", {"goodbye_line": "bye"}))
 
     assert robot == [{"action": "dance"}]
     assert scheduling == "INTERRUPT"
     assert result["celebrated"] is True
-    assert session.finished is True
+    # _dispatch_tool requests finish via the flag but does NOT set _done itself,
+    # so the caller can send the final tool response first.
+    assert finish is True
+    assert session.finished is False
     assert any(m.get("state") == "celebrate" for m in emitted)
 
 
-def test_stop_and_reset_finishes() -> None:
+def test_stop_and_reset_signals_finish() -> None:
     session, emitted, _robot = _make_session()
-    result, scheduling = _run(session._dispatch_tool("stop_and_reset", {"reason": "left"}))
+    result, scheduling, finish = _run(session._dispatch_tool("stop_and_reset", {"reason": "left"}))
 
     assert result["reset"] is True
     assert scheduling == "INTERRUPT"
-    assert session.finished is True
+    assert finish is True
+    assert session.finished is False
     assert any(m.get("state") == "reset" for m in emitted)
 
 
 def test_unknown_tool_returns_failure() -> None:
     session, _emitted, _robot = _make_session()
-    result, scheduling = _run(session._dispatch_tool("frobnicate", {}))
+    result, scheduling, finish = _run(session._dispatch_tool("frobnicate", {}))
 
     assert result["success"] is False
     assert scheduling is None
+    assert finish is False
+
+
+def test_handle_tool_calls_finishes_after_send() -> None:
+    session, emitted, _robot = _make_session()
+    session._types = SimpleNamespace(FunctionResponse=lambda **kw: kw)
+    mock = _MockLiveSession([])
+    session._session = mock
+    call = SimpleNamespace(id="c1", name="celebrate", args={"goodbye_line": "bye"})
+
+    _run(session._handle_tool_calls([call]))
+
+    # The terminal response was sent, and only then was the session finished.
+    assert mock.tool_responses
+    assert mock.tool_responses[0]["function_responses"][0]["name"] == "celebrate"
+    assert session.finished is True
+    assert any(m.get("state") == "celebrate" for m in emitted)
+
+
+def test_run_emits_terminal_reset_when_not_finished_by_tool() -> None:
+    session, emitted, _robot = _make_session(idle_timeout_s=100.0)
+    session._types = SimpleNamespace()
+    mock = _MockLiveSession([])  # empty receive -> recv_loop returns immediately
+
+    async def scenario():
+        session._session = mock
+        await asyncio.wait_for(session.run(), timeout=3.0)
+
+    _run(scenario())
+
+    assert any(
+        m.get("type") == "conversation_state" and m.get("state") == "reset"
+        for m in emitted
+    )
 
 
 # -- receive loop ------------------------------------------------------------

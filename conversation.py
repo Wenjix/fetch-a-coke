@@ -99,6 +99,7 @@ class LiveConversationSession:
         self._nudged = False
         self._last_framing_key: tuple[str, str] | None = None
         self._last_framing_at = 0.0
+        self._terminal_emitted = False
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -148,6 +149,10 @@ class LiveConversationSession:
             for task in (*tasks, done_waiter):
                 task.cancel()
             await asyncio.gather(*tasks, done_waiter, return_exceptions=True)
+            if not self._terminal_emitted:
+                # The session ended without a tool/idle reset (e.g. an exception
+                # in a loop) — tell the browser so it leaves conversation mode.
+                await self._emit_terminal("reset", {"reason": "ended"})
             await self.close()
 
     async def close(self) -> None:
@@ -276,11 +281,7 @@ class LiveConversationSession:
                 continue
             now = self._loop.time()
             if now - self._last_activity_at > self.idle_timeout_s:
-                await self._emit({
-                    "type": "conversation_state",
-                    "state": "reset",
-                    "data": {"reason": "idle_timeout"},
-                })
+                await self._emit_terminal("reset", {"reason": "idle_timeout"})
                 self._finish()
                 return
             if (
@@ -299,16 +300,22 @@ class LiveConversationSession:
         if self._session is None:
             return
         pending: list[tuple[Any, str, dict[str, Any], str | None]] = []
+        should_finish = False
         for call in function_calls:
             name = str(getattr(call, "name", "") or "")
             args = dict(getattr(call, "args", None) or {})
-            result, scheduling = await self._dispatch_tool(name, args)
+            result, scheduling, finish = await self._dispatch_tool(name, args)
+            should_finish = should_finish or finish
             pending.append((getattr(call, "id", None), name, result, scheduling))
         if not await self._send_tool_responses(pending, with_scheduling=True):
             # Scheduling is an async-function-calling hint; a synchronous-only
             # model may reject it. Retry without it so the result is delivered
             # and the conversation never hangs waiting on a tool response.
             await self._send_tool_responses(pending, with_scheduling=False)
+        # Finish only after the final response is sent, so done_waiter cannot
+        # cancel _recv_loop mid-send and drop the terminal tool response.
+        if should_finish:
+            self._finish()
 
     async def _send_tool_responses(
         self,
@@ -328,7 +335,12 @@ class LiveConversationSession:
             logger.exception("send_tool_response failed (with_scheduling=%s)", with_scheduling)
             return False
 
-    async def _dispatch_tool(self, name: str, args: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    async def _dispatch_tool(
+        self, name: str, args: dict[str, Any]
+    ) -> tuple[dict[str, Any], str | None, bool]:
+        """Returns (response, scheduling, finish). ``finish`` is applied by the
+        caller only after the tool response is sent, so the terminal response is
+        never dropped by an early session shutdown."""
         if name == "take_order":
             quantity = _coerce_int(args.get("quantity"), default=1, low=1, high=4)
             noun = "Coke" if quantity == 1 else "Cokes"
@@ -342,36 +354,39 @@ class LiveConversationSession:
                     ),
                 },
                 "WHEN_IDLE",
+                False,
             )
 
         if name == "take_photo":
             await self._emit({"type": "conversation_state", "state": "take_photo", "data": {}})
-            return ({"photo_taken": True, "ts": datetime.now().isoformat(timespec="seconds")}, "WHEN_IDLE")
+            return (
+                {"photo_taken": True, "ts": datetime.now().isoformat(timespec="seconds")},
+                "WHEN_IDLE",
+                False,
+            )
 
         if name == "do_trick":
             trick = str(args.get("trick") or "wave").strip().lower()
             if trick not in ("wave", "dance"):
-                return ({"performed": False, "error": f"unknown trick {trick!r}"}, "WHEN_IDLE")
+                return ({"performed": False, "error": f"unknown trick {trick!r}"}, "WHEN_IDLE", False)
             robot = await self._robot_action({"action": trick})
-            return ({"performed": bool(robot.get("ok", False)), "trick": trick, "robot_state": robot}, "WHEN_IDLE")
+            return (
+                {"performed": bool(robot.get("ok", False)), "trick": trick, "robot_state": robot},
+                "WHEN_IDLE",
+                False,
+            )
 
         if name == "celebrate":
             robot = await self._robot_action({"action": "dance"})
-            await self._emit({
-                "type": "conversation_state",
-                "state": "celebrate",
-                "data": {"goodbye_line": str(args.get("goodbye_line") or "")},
-            })
-            self._finish()
-            return ({"celebrated": True, "robot_state": robot}, "INTERRUPT")
+            await self._emit_terminal("celebrate", {"goodbye_line": str(args.get("goodbye_line") or "")})
+            return ({"celebrated": True, "robot_state": robot}, "INTERRUPT", True)
 
         if name == "stop_and_reset":
             reason = str(args.get("reason") or "")
-            await self._emit({"type": "conversation_state", "state": "reset", "data": {"reason": reason}})
-            self._finish()
-            return ({"reset": True, "reason": reason}, "INTERRUPT")
+            await self._emit_terminal("reset", {"reason": reason})
+            return ({"reset": True, "reason": reason}, "INTERRUPT", True)
 
-        return ({"success": False, "error": f"unknown tool {name!r}"}, None)
+        return ({"success": False, "error": f"unknown tool {name!r}"}, None, False)
 
     async def _robot_action(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self._robot_action_cb is None:
@@ -450,6 +465,12 @@ class LiveConversationSession:
             await self._emit_cb(message)
         except Exception:
             logger.exception("conversation emit failed")
+
+    async def _emit_terminal(self, state: str, data: dict[str, Any] | None = None) -> None:
+        """Emit a terminal conversation_state and record that the browser was told
+        the interaction ended, so run()'s finally won't send a duplicate reset."""
+        self._terminal_emitted = True
+        await self._emit({"type": "conversation_state", "state": state, "data": data or {}})
 
     def _finish(self) -> None:
         self._done.set()
