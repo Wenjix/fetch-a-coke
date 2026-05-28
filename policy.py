@@ -153,8 +153,8 @@ def _default_decision(reason: str) -> dict[str, Any]:
         "line": "",
         "simulated_cmd_vel": {
             "linear_x": 0.0,
-            "angular_z": 0.35,
-            "duration_s": 0.8,
+            "angular_z": 0.0,
+            "duration_s": 0.0,
         },
         "notes": reason,
     }
@@ -309,6 +309,10 @@ def _cmd_for_target(bearing: Bearing, range_estimate: RangeEstimate) -> dict[str
     return {"linear_x": linear_x, "angular_z": angular_z, "duration_s": duration_s}
 
 
+def _cmd_for_search() -> dict[str, float]:
+    return {"linear_x": 0.0, "angular_z": 0.35, "duration_s": 0.8}
+
+
 def _normalize_decision(
     raw: dict[str, Any],
     config: FetchPolicyConfig,
@@ -352,11 +356,12 @@ def _normalize_decision(
             config.max_line_chars,
         )
 
-    cmd = (
-        _cmd_for_target(bearing, range_estimate)
-        if state == "approach"
-        else _default_decision("")["simulated_cmd_vel"]
-    )
+    if state == "approach":
+        cmd = _cmd_for_target(bearing, range_estimate)
+    elif state == "search" and interaction_phase == "find_guest":
+        cmd = _cmd_for_search()
+    else:
+        cmd = _default_decision("")["simulated_cmd_vel"]
     if state in {"greet", "wait_for_bottle", "photo_ready"}:
         cmd = {"linear_x": 0.0, "angular_z": 0.0, "duration_s": 0.0}
 

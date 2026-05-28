@@ -2444,7 +2444,7 @@
           return "I’m getting ready for the next Coke/photo mission.";
         }
         if (message.state === "search") {
-          return "I’m sniffing out a good Coke/photo star.";
+          return "Hunting for a photogenic target.";
         }
         if (message.state === "approach") {
           return `I found a good target.${targetText} I’m rolling over now.`;
@@ -2459,6 +2459,21 @@
           return `I’m in ${stateName} mode for a ${offerText}.${targetText}${evidenceText}`;
         }
         return `I’m in ${stateName} mode.${targetText}${evidenceText}`;
+      }
+
+      function shouldExecuteRobotMove(message, cmd) {
+        const hasMotion = Math.abs(cmd.linear_x || 0) > 0 || Math.abs(cmd.angular_z || 0) > 0;
+        if (!hasMotion) {
+          return false;
+        }
+        if (message.state === "approach") {
+          return true;
+        }
+        return (
+          message.state === "search" &&
+          state.workflow === "find_guest" &&
+          state.visionSource === "dog"
+        );
       }
 
       async function startCamera() {
@@ -2674,7 +2689,7 @@
 
         const cmd = message.simulated_cmd_vel || {};
         els.motion.textContent = `cmd ${(cmd.linear_x || 0).toFixed(2)} / ${(cmd.angular_z || 0).toFixed(2)}`;
-        if (message.state === "approach") {
+        if (shouldExecuteRobotMove(message, cmd)) {
           robotAction({
             action: "move",
             linear_x: cmd.linear_x || 0,
@@ -3552,6 +3567,7 @@
         if (source === "dog") {
           await enableDog();
           await ensureDogReady();
+          await startRobotPreflight();
           refreshDogPreview();
         } else if (source === "record3d") {
           await enableRecord3d();
@@ -3560,16 +3576,13 @@
           await startCamera();
         }
         startVisionStatusPolling();
-        if (source === "dog") {
-          startRobotPreflight();
-        }
         if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
           connect();
         }
         state.scanning = true;
         state.workflow = "find_guest";
         setRunningUi(true);
-        els.line.textContent = "I’m sniffing out a good Coke/photo star.";
+        els.line.textContent = "Hunting for a photogenic target.";
         log("auto scan started: every 1s");
         sendFrame();
         if (state.timer) {
