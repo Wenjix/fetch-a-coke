@@ -214,6 +214,7 @@ def test_cli_defaults_to_gemini_tts(monkeypatch) -> None:
     args = iphone_middleware._parse_args()
 
     assert args.tts_provider == "gemini"
+    assert args.tts_model == "gpt-4o-mini-tts"
 
 
 def test_hello_advertises_gemini_speak_route() -> None:

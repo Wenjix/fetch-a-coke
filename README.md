@@ -103,7 +103,7 @@ TTS instead.
 Browser speech uses `/speak` by default. The default `/speak` provider is
 Gemini Live TTS (`gemini-3.1-flash-live-preview`) and requires
 `GEMINI_API_KEY` or `GOOGLE_API_KEY`. With `--tts-provider openai`, `/speak`
-uses OpenAI TTS and requires `OPENAI_API_KEY`.
+uses OpenAI TTS with `gpt-4o-mini-tts` by default and requires `OPENAI_API_KEY`.
 
 OpenAI Realtime WebRTC is optional. Enable it explicitly with
 `--tts-provider openai --enable-realtime`; the browser will try Realtime first
