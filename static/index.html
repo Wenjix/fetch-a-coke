@@ -2636,6 +2636,7 @@
         audioMode: "",
         voice: "echo",
         liveModel: "gemini-3.1-flash-live-preview",
+        liveModelExplicit: false,
         openaiAvailable: false,
         geminiAvailable: false,
         audioModalOpener: null,
@@ -2965,6 +2966,10 @@
           state.conversationEnabled = Boolean(message.conversation_enabled);
           state.openaiAvailable = Boolean(message.openai_available);
           state.geminiAvailable = Boolean(message.gemini_available);
+          // Honor the server's --conversation-model unless the user picked one.
+          if (!state.liveModelExplicit && message.conversation_model) {
+            state.liveModel = message.conversation_model;
+          }
           reconcileAudioMode();
           refreshAudioModal();
           if (state.audioRoute !== "realtime_then_speak") {
@@ -3436,7 +3441,10 @@
           const liveModel = localStorage.getItem("fetch.liveModel");
           if (mode && AUDIO_MODES.includes(mode)) state.audioMode = mode;
           if (voice) state.voice = voice;
-          if (liveModel) state.liveModel = liveModel;
+          if (liveModel) {
+            state.liveModel = liveModel;
+            state.liveModelExplicit = true; // a stored value is an explicit user choice
+          }
         } catch {}
       }
 
@@ -3511,7 +3519,20 @@
         );
         if (modeRadio) modeRadio.checked = true;
         if (els.audioVoice) els.audioVoice.value = state.voice;
-        if (els.audioLiveModel) els.audioLiveModel.value = state.liveModel;
+        // Make sure the active model is selectable even if the server was
+        // launched with a model that isn't one of the built-in options.
+        if (els.audioLiveModel && state.liveModel) {
+          const hasOption = [...els.audioLiveModel.options].some(
+            (opt) => opt.value === state.liveModel,
+          );
+          if (!hasOption) {
+            const opt = document.createElement("option");
+            opt.value = state.liveModel;
+            opt.textContent = state.liveModel;
+            els.audioLiveModel.appendChild(opt);
+          }
+          els.audioLiveModel.value = state.liveModel;
+        }
         // The live model only matters when Live is usable.
         const liveReady = audioModeStatus("live").available;
         const modelField = els.audioModal.querySelector("#audioModelField");
@@ -3546,7 +3567,10 @@
         const wasLive = state.audioMode === "live";
         if (checked && AUDIO_MODES.includes(checked.value)) state.audioMode = checked.value;
         if (els.audioVoice) state.voice = els.audioVoice.value;
-        if (els.audioLiveModel) state.liveModel = els.audioLiveModel.value;
+        if (els.audioLiveModel) {
+          state.liveModel = els.audioLiveModel.value;
+          state.liveModelExplicit = true; // user picked a model in the modal
+        }
         reconcileAudioMode();
         persistAudioSettings();
         if (wasLive && state.audioMode !== "live" && state.conversationActive) {
@@ -3784,8 +3808,9 @@
         if (state.micStream) {
           return;
         }
+        let micStream = null;
         try {
-          const micStream = await navigator.mediaDevices.getUserMedia({
+          micStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
               noiseSuppression: true,
@@ -3793,11 +3818,18 @@
             },
             video: false,
           });
-          state.micStream = micStream;
+          // Only mark the mic as ready once capture is actually wired up, so a
+          // failure here leaves state.micStream null and beginOffer falls back
+          // to the scripted offer instead of opening a silent live session.
           await initMicCapture(micStream);
+          state.micStream = micStream;
           log("mic ready");
         } catch (err) {
           log(`mic ${err.message}`);
+          if (micStream) {
+            micStream.getTracks().forEach((track) => track.stop());
+          }
+          stopMic();
         }
       }
 
