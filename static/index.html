@@ -2036,10 +2036,24 @@
         ttsProvider: "openai",
         audioRoute: "speak",
         realtimeAvailable: false,
+        conversationEnabled: false,
+        conversationActive: false,
+        micStream: null,
+        micSource: null,
+        micWorkletNode: null,
+        micScriptNode: null,
+        playbackSampleRate: 24000,
+        playbackTime: 0,
+        playbackSources: [],
+        echoGate: false,
+        echoSuppress: false,
+        lastConvFrameAt: 0,
       };
 
       const REALTIME_CLIENT_SECRET_TIMEOUT_MS = 5000;
       const REALTIME_SDP_TIMEOUT_MS = 8000;
+      const MIC_TARGET_RATE = 16000;
+      const CONV_FRAME_INTERVAL_MS = 2500;
 
       function setStatus(text) {
         state.transportStatus = text;
@@ -2142,6 +2156,9 @@
           setScanPending(false);
           setRunningUi(false);
           closeRealtimeVoiceSession();
+          if (state.conversationActive) {
+            endConversation(false);
+          }
           log("socket closed");
         };
         state.ws.onerror = () => {
@@ -2169,6 +2186,13 @@
         }
         if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
           return;
+        }
+        if (state.conversationActive) {
+          const nowTs = Date.now();
+          if (nowTs - state.lastConvFrameAt < CONV_FRAME_INTERVAL_MS) {
+            return;
+          }
+          state.lastConvFrameAt = nowTs;
         }
         if (state.visionSource === "dog") {
           if (!state.dogCameraStreaming || state.lastDogFrames === 0) {
@@ -2228,10 +2252,27 @@
           state.ttsProvider = message.tts_provider || "openai";
           state.audioRoute = message.audio_route || "speak";
           state.realtimeAvailable = Boolean(message.realtime_enabled);
+          state.conversationEnabled = Boolean(message.conversation_enabled);
           if (state.audioRoute !== "realtime_then_speak") {
             closeRealtimeVoiceSession();
           }
           log(`vision ${message.vision_provider || "openai"} ${message.model}; audio ${state.audioRoute}`);
+          return;
+        }
+        if (message.type === "audio_out") {
+          handleAudioOut(message);
+          return;
+        }
+        if (message.type === "transcript") {
+          handleTranscript(message);
+          return;
+        }
+        if (message.type === "interrupted") {
+          handleInterrupted();
+          return;
+        }
+        if (message.type === "conversation_state") {
+          await handleConversationState(message);
           return;
         }
         if (message.type === "error") {
@@ -2254,7 +2295,7 @@
 
         const cmd = message.simulated_cmd_vel || {};
         els.motion.textContent = `cmd ${(cmd.linear_x || 0).toFixed(2)} / ${(cmd.angular_z || 0).toFixed(2)}`;
-        if (message.state === "approach") {
+        if (message.state === "approach" && !state.conversationActive) {
           robotAction({
             action: "move",
             linear_x: cmd.linear_x || 0,
@@ -2281,6 +2322,13 @@
         }
         if (message.record3d) {
           log(`record3d frames ${message.record3d.frames_received || 0}`);
+        }
+
+        if (state.conversationActive) {
+          // The live conversation owns audio, motion, and the photo; vision
+          // frames during a conversation are framing hints only (already sent
+          // to the live session by the server).
+          return;
         }
 
         if (message.state === "greet" && message.line && state.workflow === "find_guest") {
@@ -2310,6 +2358,17 @@
         state.lastLine = message.line;
         els.motion.textContent = "wave";
         await robotAction({ action: "wave" });
+        if (state.conversationEnabled) {
+          state.conversationActive = true;
+          state.lastConvFrameAt = Date.now();
+          setWorkflow("confirm_bottle", "Live conversation: taking the order and photo.");
+          if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+            state.ws.send(JSON.stringify({ type: "conversation_start", context: message.line }));
+          }
+          await startMic();
+          log("live conversation started");
+          return;
+        }
         log("wave and Coke-for-photo offer");
         await speakOnce(message.line, "spoke joke and offer");
         setWorkflow("confirm_bottle", "Waiting for the person holding the Coke can up in frame.");
@@ -2803,6 +2862,294 @@
         window.setTimeout(() => document.body.classList.remove("dancing"), 1800);
       }
 
+      function ensureAudioContext() {
+        if (!state.audioContext) {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          state.audioContext = new Ctx();
+        }
+        return state.audioContext;
+      }
+
+      function floatToInt16(input) {
+        const out = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        return out;
+      }
+
+      function downsampleTo16k(input, inRate, outRate) {
+        if (outRate >= inRate) {
+          return floatToInt16(input);
+        }
+        const ratio = inRate / outRate;
+        const newLen = Math.floor(input.length / ratio);
+        const out = new Int16Array(newLen);
+        for (let i = 0; i < newLen; i++) {
+          const start = Math.floor(i * ratio);
+          const end = Math.min(input.length, Math.floor((i + 1) * ratio));
+          let sum = 0;
+          let count = 0;
+          for (let j = start; j < end; j++) {
+            sum += input[j];
+            count += 1;
+          }
+          const sample = count ? sum / count : 0;
+          const s = Math.max(-1, Math.min(1, sample));
+          out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        return out;
+      }
+
+      function int16ToBase64(int16) {
+        const bytes = new Uint8Array(int16.buffer, int16.byteOffset, int16.byteLength);
+        let binary = "";
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        return btoa(binary);
+      }
+
+      function base64ToInt16(b64) {
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return new Int16Array(bytes.buffer, 0, Math.floor(bytes.byteLength / 2));
+      }
+
+      async function startMic() {
+        if (state.micStream) {
+          return;
+        }
+        try {
+          const micStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+            video: false,
+          });
+          state.micStream = micStream;
+          await initMicCapture(micStream);
+          log("mic ready");
+        } catch (err) {
+          log(`mic ${err.message}`);
+        }
+      }
+
+      function stopMic() {
+        if (state.micWorkletNode) {
+          try { state.micWorkletNode.disconnect(); } catch {}
+          state.micWorkletNode = null;
+        }
+        if (state.micScriptNode) {
+          try { state.micScriptNode.disconnect(); } catch {}
+          state.micScriptNode = null;
+        }
+        if (state.micSource) {
+          try { state.micSource.disconnect(); } catch {}
+          state.micSource = null;
+        }
+        if (state.micStream) {
+          state.micStream.getTracks().forEach((track) => track.stop());
+          state.micStream = null;
+        }
+      }
+
+      async function initMicCapture(stream) {
+        const ctx = ensureAudioContext();
+        if (ctx.state === "suspended") {
+          try { await ctx.resume(); } catch {}
+        }
+        const source = ctx.createMediaStreamSource(stream);
+        state.micSource = source;
+        const inRate = ctx.sampleRate;
+
+        const sendChunk = (float32) => {
+          if (!state.conversationActive) {
+            return;
+          }
+          if (state.echoSuppress && state.echoGate) {
+            return;
+          }
+          const pcm16 = downsampleTo16k(float32, inRate, MIC_TARGET_RATE);
+          if (!pcm16.length) {
+            return;
+          }
+          if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+            state.ws.send(JSON.stringify({
+              type: "mic_chunk",
+              data: int16ToBase64(pcm16),
+              ts: Date.now(),
+            }));
+          }
+        };
+
+        if (ctx.audioWorklet) {
+          try {
+            const processorCode = `
+              class MicProcessor extends AudioWorkletProcessor {
+                constructor() {
+                  super();
+                  this._chunks = [];
+                  this._count = 0;
+                  this._target = Math.floor(sampleRate * 0.1);
+                }
+                process(inputs) {
+                  const input = inputs[0];
+                  if (input && input[0]) {
+                    this._chunks.push(input[0].slice(0));
+                    this._count += input[0].length;
+                    if (this._count >= this._target) {
+                      const merged = new Float32Array(this._count);
+                      let offset = 0;
+                      for (const chunk of this._chunks) { merged.set(chunk, offset); offset += chunk.length; }
+                      this.port.postMessage(merged);
+                      this._chunks = [];
+                      this._count = 0;
+                    }
+                  }
+                  return true;
+                }
+              }
+              registerProcessor('mic-processor', MicProcessor);
+            `;
+            const blob = new Blob([processorCode], { type: "application/javascript" });
+            const url = URL.createObjectURL(blob);
+            await ctx.audioWorklet.addModule(url);
+            URL.revokeObjectURL(url);
+            const node = new AudioWorkletNode(ctx, "mic-processor");
+            node.port.onmessage = (event) => sendChunk(event.data);
+            source.connect(node);
+            const sink = ctx.createGain();
+            sink.gain.value = 0;
+            node.connect(sink);
+            sink.connect(ctx.destination);
+            state.micWorkletNode = node;
+            return;
+          } catch (err) {
+            log(`worklet ${err.message}; using fallback capture`);
+          }
+        }
+
+        const node = ctx.createScriptProcessor(4096, 1, 1);
+        node.onaudioprocess = (event) => sendChunk(event.inputBuffer.getChannelData(0));
+        source.connect(node);
+        node.connect(ctx.destination);
+        state.micScriptNode = node;
+      }
+
+      function handleAudioOut(message) {
+        const ctx = ensureAudioContext();
+        if (ctx.state === "suspended") {
+          ctx.resume().catch(() => {});
+        }
+        const int16 = base64ToInt16(message.data || "");
+        if (!int16.length) {
+          return;
+        }
+        const float32 = new Float32Array(int16.length);
+        for (let i = 0; i < int16.length; i++) {
+          float32[i] = int16[i] / 32768;
+        }
+        const buffer = ctx.createBuffer(1, float32.length, state.playbackSampleRate);
+        buffer.copyToChannel(float32, 0);
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(ctx.destination);
+        const now = ctx.currentTime;
+        let startAt = state.playbackTime;
+        if (startAt < now + 0.02) {
+          startAt = now + 0.02;
+        }
+        src.start(startAt);
+        state.playbackTime = startAt + buffer.duration;
+        state.playbackSources.push(src);
+        state.echoGate = true;
+        src.onended = () => {
+          state.playbackSources = state.playbackSources.filter((s) => s !== src);
+          if (state.playbackSources.length === 0) {
+            state.echoGate = false;
+          }
+        };
+      }
+
+      function handleInterrupted() {
+        for (const src of state.playbackSources) {
+          try { src.stop(); } catch {}
+        }
+        state.playbackSources = [];
+        state.playbackTime = 0;
+        state.echoGate = false;
+      }
+
+      function handleTranscript(message) {
+        if (!message.text) {
+          return;
+        }
+        const who = message.speaker === "user" ? "you" : "dog";
+        log(`${who}: ${message.text}`);
+        if (message.speaker === "dog") {
+          els.line.textContent = message.text;
+        }
+      }
+
+      async function handleConversationState(message) {
+        const conversationState = message.state;
+        if (conversationState === "active") {
+          log("conversation active");
+          return;
+        }
+        if (conversationState === "take_photo") {
+          const now = Date.now();
+          if (now - state.lastPhotoAt < 8000 || state.photoInProgress) {
+            return;
+          }
+          state.lastPhotoAt = now;
+          state.photoInProgress = true;
+          try {
+            await snapPhoto();
+            await playPrintSound();
+            log("conversation photo saved");
+          } catch (err) {
+            log(`photo ${err.message}`);
+          } finally {
+            state.photoInProgress = false;
+          }
+          return;
+        }
+        if (conversationState === "celebrate") {
+          dance();
+          log("conversation celebrate");
+          endConversation(false);
+          return;
+        }
+        if (conversationState === "reset") {
+          log(`conversation reset ${(message.data && message.data.reason) || ""}`);
+          endConversation(false);
+          return;
+        }
+      }
+
+      function endConversation(notifyServer = false) {
+        if (notifyServer && state.ws && state.ws.readyState === WebSocket.OPEN) {
+          try { state.ws.send(JSON.stringify({ type: "conversation_stop" })); } catch {}
+        }
+        state.conversationActive = false;
+        stopMic();
+        handleInterrupted();
+        if (state.scanning) {
+          setWorkflow("find_guest", "Looking for the next customer.");
+        } else {
+          state.workflow = "find_guest";
+        }
+      }
+
       async function robotAction(payload) {
         try {
           const response = await fetch("/robot/action", {
@@ -3148,6 +3495,9 @@
         state.scanning = false;
         state.workflow = "find_guest";
         setScanPending(false);
+        if (state.conversationActive) {
+          endConversation(true);
+        }
         closeRealtimeVoiceSession();
         if (state.timer) {
           window.clearInterval(state.timer);
