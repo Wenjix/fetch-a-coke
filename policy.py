@@ -269,7 +269,7 @@ def _ensure_script_line(
         has_back = re.search(r"\b(back|bag|pack)\b", lower) is not None
         if has_coke and has_back:
             return cleaned
-        instruction = "Grab a Coke from my back first, then I will take your instant photo."
+        instruction = "I will hold still. Grab one Coke from my back, then pose with it for your instant photo."
     elif interaction_phase == "confirm_bottle" and state == "wait_for_bottle":
         has_coke = _mentions_coke_container(lower)
         has_frame = re.search(r"\b(frame|camera|photo|front|center|hold|show)\b", lower) is not None
@@ -477,7 +477,7 @@ class FetchPolicy:
         if interaction_phase == "confirm_bottle":
             goal = """
 Current phase: confirm_bottle.
-- The dog has already waved and told the person to take a Coke can from the dog's back.
+- The dog has already waved and told the person to take one Coke can from the dog's back.
 - Look for the same or primary person holding a Coke can, Coke bottle, soda can, or clearly bottle-shaped drink from the dog's back.
 - The person and Coke must both be visible and well framed for a photo. Prefer face/upper body plus the Coke held out front; reject if the Coke is cropped out, hidden, or too blurry.
 - If ready, set photo_ready true, action "take_photo_dance", and line to a short photographer cue that tells them to hold the Coke up/front and says "cheers", "cheese", or a funny camera phrase.
@@ -486,15 +486,15 @@ Current phase: confirm_bottle.
         else:
             goal = """
 Current phase: find_guest.
-- Find the single best visible target for a Coca-Cola marketing robot dog giving out free Cokes and taking instant photos.
+- Find the single best visible target for a Coca-Cola marketing robot dog offering one free Coke in exchange for an instant photo.
 - Pick anyone who looks chill and likely to enjoy the bit: visibly thirsty, curious, amused, playful, social, looking toward the dog/camera, or otherwise like they would be in for a good laugh and a photo.
 - Do not require the person to be lying down, reclining, alone, empty-handed, or fully idle.
 - Phone, book, laptop, food, or existing drink are not automatic rejects. Treat them as weak busy signals only when the person looks engrossed, unavailable, or likely to be annoyed.
 - Prefer open posture, visible face/upper body, a clear path, and enough room to stop safely.
 - The dog should approach only if the path looks safe, then stop within a few meters.
 - Generate the greeting only when the target is inside 4 meters.
-- The greeting must wave, make a highly personalized joke from visible non-sensitive appearance/context, clearly tell them to take a Coke can from the dog's back first, then tell them they get an instant photo.
-- Be explicit about the sequence: take Coke from my back, then pose for the photo with the Coke.
+- The greeting must wave, make a highly personalized joke from visible non-sensitive appearance/context, clearly tell them the dog will hold still while they take one Coke can from the dog's back, then tell them they get an instant photo.
+- Be explicit about the sequence: take one Coke from my back, then pose for the photo with the Coke.
 """
 
         prompt = f"""
