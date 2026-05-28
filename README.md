@@ -15,7 +15,7 @@ WebSocket, and the server returns motion/speech/photo decisions.
 6. Wave and say a personalized joke based on visible, non-sensitive appearance/context.
 7. Tell the person to take a Coke can from the dog's back first, then pose for an instant photo.
 8. Coach them to hold the Coke can out front and center themselves in the frame.
-9. Say a photographer cue, save the photo, play a print sound, tell them the photo is ready on the dog's head, and trigger a dance.
+9. Say a photographer cue, save the photo to iCloud Drive's `fetch` folder, play a print sound, tell them the photo is ready on the dog's head, and trigger a dance.
 
 The prototype does not infer identity or sensitive traits. Humor is constrained to
 visible non-sensitive context such as setting, posture, lighting, colors, bags,
@@ -75,6 +75,10 @@ The adapter exposes:
 - `POST /realtime/client-secret`
 - `POST /robot/preflight`
 - `POST /robot/action`
+
+Saved photos are written to both the local preview folder under
+`static/captures` and `~/Library/Mobile Documents/com~apple~CloudDocs/fetch`
+so they sync through iCloud Drive.
 
 Record3D frames are analyzed with the RGB image plus a `depth_hint` containing
 center-depth and near-object summaries in meters. The default OpenAI vision model

@@ -2274,10 +2274,6 @@
             <img class="photo-watermark" src="/fetch/static/logo.png" alt="" aria-hidden="true" />
             <img id="photoPreview" alt="" />
           </div>
-          <a id="downloadLink" class="bp5-button bp5-minimal" download="fetch-photo.jpg" hidden>
-            <span class="bp5-icon bp5-icon-download" aria-hidden="true"></span>
-            Download photo
-          </a>
         </div>
 
         <section class="bp5-card events-panel">
@@ -2306,14 +2302,12 @@
         record3dPreview: document.getElementById("record3dPreview"),
         depthPreview: document.getElementById("depthPreview"),
         photoPreview: document.getElementById("photoPreview"),
-        downloadLink: document.getElementById("downloadLink"),
         log: document.getElementById("log"),
         audio: document.getElementById("audio"),
         printAudio: document.getElementById("printAudio"),
       };
 
       const DOG_PLACEHOLDER_SRC = "/fetch/static/idle-camera-feed.png";
-      const LOGO_SRC = "/fetch/static/logo.png";
       const PRINT_SOUND_SRC = "/fetch/static/audio/freesound_community-polaroid_600-83252.mp3";
       const SCAN_INTERVAL_MS = 1000;
 
@@ -2342,7 +2336,6 @@
         dogLidarLive: false,
         robotPreflightPromise: null,
         robotPreflightComplete: false,
-        downloadObjectUrl: null,
         lastRecord3dFrames: 0,
         audioContext: null,
         realtimePc: null,
@@ -2536,66 +2529,8 @@
         return els.canvas.toDataURL("image/jpeg", 0.72);
       }
 
-      function loadImage(src) {
-        return new Promise((resolve, reject) => {
-          const image = new Image();
-          image.crossOrigin = "anonymous";
-          image.onload = () => resolve(image);
-          image.onerror = () => reject(new Error(`image load failed: ${src}`));
-          image.src = src;
-        });
-      }
-
-      function revokeDownloadUrl() {
-        if (state.downloadObjectUrl) {
-          URL.revokeObjectURL(state.downloadObjectUrl);
-          state.downloadObjectUrl = null;
-        }
-      }
-
-      async function buildWatermarkedDownloadUrl(imageUrl) {
-        const [photo, logo] = await Promise.all([loadImage(imageUrl), loadImage(LOGO_SRC)]);
-        const width = photo.naturalWidth || photo.width;
-        const height = photo.naturalHeight || photo.height;
-        els.canvas.width = width;
-        els.canvas.height = height;
-        const ctx = els.canvas.getContext("2d", { alpha: false });
-        ctx.drawImage(photo, 0, 0, width, height);
-
-        const logoWidth = Math.round(Math.min(width * 0.22, 360));
-        const logoHeight = Math.round(logoWidth * ((logo.naturalHeight || logo.height) / (logo.naturalWidth || logo.width)));
-        const margin = Math.round(Math.max(width, height) * 0.035);
-        ctx.save();
-        ctx.globalAlpha = 0.82;
-        ctx.drawImage(logo, width - logoWidth - margin, height - logoHeight - margin, logoWidth, logoHeight);
-        ctx.restore();
-
-        return new Promise((resolve, reject) => {
-          els.canvas.toBlob(
-            (blob) => {
-              if (!blob) {
-                reject(new Error("watermark render failed"));
-                return;
-              }
-              revokeDownloadUrl();
-              state.downloadObjectUrl = URL.createObjectURL(blob);
-              resolve(state.downloadObjectUrl);
-            },
-            "image/jpeg",
-            0.9,
-          );
-        });
-      }
-
       async function showPhotoResult(url) {
         els.photoPreview.src = url;
-        els.downloadLink.href = url;
-        els.downloadLink.hidden = false;
-        try {
-          els.downloadLink.href = await buildWatermarkedDownloadUrl(url);
-        } catch (err) {
-          log(`download watermark ${err.message}`);
-        }
       }
 
       function sendFrame() {
@@ -2759,7 +2694,7 @@
           await speakOnce(line, "spoke cheese cue");
           await snapPhoto();
           await playPrintSound();
-          const doneLine = "Got it. Your photo is printing on my head. Tiny victory dance, then I’m off.";
+          const doneLine = "Got it. Your photo is saved to iCloud. Tiny victory dance, then I’m off.";
           els.line.textContent = doneLine;
           await speakOnce(doneLine, "spoke photo pickup cue");
           dance();
@@ -3202,14 +3137,14 @@
           const saved = await savePhoto({ source: "dog" });
           const url = `${saved.url}?ts=${Date.now()}`;
           await showPhotoResult(url);
-          log(`dog photo saved ${saved.path || ""}`);
+          log(`dog photo saved ${saved.icloud_path || saved.path || ""}`);
           return;
         }
         if (state.visionSource === "record3d") {
           const saved = await savePhoto({ source: "record3d" });
           const url = `${saved.url}?ts=${Date.now()}`;
           await showPhotoResult(url);
-          log(`record3d photo saved ${saved.path || ""}`);
+          log(`record3d photo saved ${saved.icloud_path || saved.path || ""}`);
           return;
         }
         if (!els.video.videoWidth) {
@@ -3219,7 +3154,7 @@
         const saved = await savePhoto({ image_data_url: dataUrl });
         const url = `${saved.url}?ts=${Date.now()}`;
         await showPhotoResult(url);
-        log(`photo saved ${saved.path || ""}`);
+        log(`photo saved ${saved.icloud_path || saved.path || ""}`);
       }
 
       function dance() {
@@ -3642,7 +3577,6 @@
       window.addEventListener("beforeunload", closeRealtimeVoiceSession);
       els.photoPreview.addEventListener("error", () => {
         els.photoPreview.removeAttribute("src");
-        els.downloadLink.hidden = true;
         log("photo unavailable");
       });
       setRunningUi(false);

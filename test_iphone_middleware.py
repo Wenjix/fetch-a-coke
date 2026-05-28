@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, patch
+import base64
 import sys
 
 from fastapi import FastAPI
@@ -270,3 +271,27 @@ def test_speak_uses_gemini_tts_without_openai_client(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.content == b"RIFFwav"
     assert response.headers["content-type"] == "audio/wav"
+
+
+def test_save_photo_writes_local_preview_and_icloud_fetch_folder(monkeypatch, tmp_path) -> None:
+    capture_dir = tmp_path / "captures"
+    icloud_dir = tmp_path / "iCloud Drive" / "fetch"
+    monkeypatch.setattr(iphone_middleware, "CAPTURE_DIR", capture_dir)
+    monkeypatch.setattr(iphone_middleware, "ICLOUD_FETCH_DIR", icloud_dir)
+    image_bytes = b"fetch-photo"
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    middleware = iphone_middleware.FetchIphoneMiddleware()
+
+    response = TestClient(middleware.server.app).post(
+        "/photos/save",
+        json={"image_data_url": f"data:image/jpeg;base64,{encoded}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["saved"] is True
+    assert payload["url"].startswith("/fetch/static/captures/fetch-")
+    assert Path(payload["path"]).read_bytes() == image_bytes
+    assert Path(payload["icloud_path"]).read_bytes() == image_bytes
+    assert Path(payload["path"]).parent == capture_dir
+    assert Path(payload["icloud_path"]).parent == icloud_dir

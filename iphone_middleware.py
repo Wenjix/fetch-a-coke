@@ -69,6 +69,7 @@ logger = setup_logger()
 
 STATIC_DIR = Path(__file__).parent / "static"
 CAPTURE_DIR = STATIC_DIR / "captures"
+ICLOUD_FETCH_DIR = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/fetch"
 DEFAULT_PORT = 8455
 DEFAULT_OPENAI_TTS_MODEL = "tts-1"
 GO2_LIDAR_STARTUP_TIMEOUT_S = 12.0
@@ -545,6 +546,16 @@ def _jsonable_openai_response(response: Any) -> dict[str, Any]:
     }
 
 
+def _save_fetch_photo(image_bytes: bytes, filename: str) -> tuple[Path, Path]:
+    CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+    ICLOUD_FETCH_DIR.mkdir(parents=True, exist_ok=True)
+    capture_path = CAPTURE_DIR / filename
+    icloud_path = ICLOUD_FETCH_DIR / filename
+    capture_path.write_bytes(image_bytes)
+    icloud_path.write_bytes(image_bytes)
+    return capture_path, icloud_path
+
+
 class FetchIphoneMiddleware:
     """HTTPS phone-camera middleware for testing the Fetch behavior."""
 
@@ -854,14 +865,13 @@ class FetchIphoneMiddleware:
             if image_bytes is None:
                 return JSONResponse({"error": "No image available to save"}, status_code=404)
 
-            CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
             filename = f"fetch-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.jpg"
-            path = CAPTURE_DIR / filename
-            path.write_bytes(image_bytes)
+            path, icloud_path = _save_fetch_photo(image_bytes, filename)
             return {
                 "saved": True,
                 "url": f"/fetch/static/captures/{filename}",
                 "path": str(path),
+                "icloud_path": str(icloud_path),
             }
 
         @self.server.app.post("/speak")
