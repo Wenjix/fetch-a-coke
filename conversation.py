@@ -187,8 +187,11 @@ class LiveConversationSession:
         state = str(decision.get("state") or "")
         line = str(decision.get("line") or "")
         if state == "photo_ready":
-            hint = "good - the customer and Coke are well framed; take the photo now"
-        elif state == "wait_for_bottle":
+            hint = (
+                "good - the customer is clearly holding the Coke and the shot "
+                "is centered and well framed; take the photo now"
+            )
+        elif state == "wait_for_coke":
             coach = line or "ask them to hold the Coke up and center themselves"
             hint = f"not ready yet - {coach}"
         else:

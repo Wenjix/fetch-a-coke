@@ -78,6 +78,10 @@ logger = setup_logger()
 STATIC_DIR = Path(__file__).parent / "static"
 CAPTURE_DIR = STATIC_DIR / "captures"
 ICLOUD_FETCH_DIR = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/fetch"
+GOOGLE_DRIVE_FETCH_DIR = (
+    Path.home()
+    / "Library/CloudStorage/GoogleDrive-seifip@gmail.com/My Drive/robodog-fetch"
+)
 DEFAULT_PORT = 8455
 DEFAULT_OPENAI_TTS_MODEL = "tts-1"
 GO2_LIDAR_STARTUP_TIMEOUT_S = 12.0
@@ -555,14 +559,17 @@ def _jsonable_openai_response(response: Any) -> dict[str, Any]:
     }
 
 
-def _save_fetch_photo(image_bytes: bytes, filename: str) -> tuple[Path, Path]:
+def _save_fetch_photo(image_bytes: bytes, filename: str) -> tuple[Path, Path, Path]:
     CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
     ICLOUD_FETCH_DIR.mkdir(parents=True, exist_ok=True)
+    GOOGLE_DRIVE_FETCH_DIR.mkdir(parents=True, exist_ok=True)
     capture_path = CAPTURE_DIR / filename
     icloud_path = ICLOUD_FETCH_DIR / filename
+    google_drive_path = GOOGLE_DRIVE_FETCH_DIR / filename
     capture_path.write_bytes(image_bytes)
     icloud_path.write_bytes(image_bytes)
-    return capture_path, icloud_path
+    google_drive_path.write_bytes(image_bytes)
+    return capture_path, icloud_path, google_drive_path
 
 
 class FetchIphoneMiddleware:
@@ -574,7 +581,7 @@ class FetchIphoneMiddleware:
         port: int = DEFAULT_PORT,
         model: str | None = None,
         vision_provider: VisionProvider = "openai",
-        tts_provider: TtsProvider = "openai",
+        tts_provider: TtsProvider = "cartesia",
         tts_model: str = DEFAULT_OPENAI_TTS_MODEL,
         tts_voice: str = "echo",
         enable_realtime: bool = False,
@@ -1028,12 +1035,13 @@ class FetchIphoneMiddleware:
                 return JSONResponse({"error": "No image available to save"}, status_code=404)
 
             filename = f"fetch-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.jpg"
-            path, icloud_path = _save_fetch_photo(image_bytes, filename)
+            path, icloud_path, google_drive_path = _save_fetch_photo(image_bytes, filename)
             return {
                 "saved": True,
                 "url": f"/fetch/static/captures/{filename}",
                 "path": str(path),
                 "icloud_path": str(icloud_path),
+                "google_drive_path": str(google_drive_path),
             }
 
         @self.server.app.post("/speak")
@@ -1187,7 +1195,7 @@ class FetchIphoneMiddleware:
 
                     if message_type in ("frame", "dog_frame", "record3d_frame"):
                         if self._conversation_active:
-                            message["interaction_phase"] = "confirm_bottle"
+                            message["interaction_phase"] = "confirm_coke"
                             asyncio.create_task(
                                 self._route_frame_safe(send_json, message, message_type)
                             )
@@ -1246,8 +1254,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tts-provider",
         choices=("openai", "gemini", "cartesia"),
-        default="openai",
-        help="TTS provider. OpenAI uses the lowest-latency speech route by default.",
+        default="cartesia",
+        help="TTS provider. Cartesia Sonic is the default low-latency speech route.",
     )
     parser.add_argument("--tts-model", default=DEFAULT_OPENAI_TTS_MODEL, help="OpenAI TTS model.")
     parser.add_argument("--tts-voice", default="echo", help="TTS voice name (OpenAI or Gemini prebuilt).")
