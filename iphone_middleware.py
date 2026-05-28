@@ -697,6 +697,8 @@ class FetchIphoneMiddleware:
         self,
         send_json: Callable[[dict[str, Any]], Awaitable[None]],
         context: str,
+        voice: str | None = None,
+        model: str | None = None,
     ) -> None:
         if not self.conversation_enabled:
             await send_json({"type": "error", "message": "Conversation mode is disabled"})
@@ -706,8 +708,8 @@ class FetchIphoneMiddleware:
         session = LiveConversationSession(
             emit=send_json,
             robot_action=self._robot_action_async,
-            voice=self.tts_voice,
-            model=self.conversation_model,
+            voice=voice or self.tts_voice,
+            model=model or self.conversation_model,
             system_context=context,
             idle_timeout_s=CONVERSATION_IDLE_TIMEOUT_S,
         )
@@ -1021,8 +1023,12 @@ class FetchIphoneMiddleware:
                 return JSONResponse({"error": "Text is too long"}, status_code=400)
 
             voice = str(payload.get("voice") or self.tts_voice)
+            try:
+                provider = _validate_tts_provider(str(payload.get("provider") or self.tts_provider))
+            except ValueError:
+                return JSONResponse({"error": "Unknown TTS provider"}, status_code=400)
 
-            if self.tts_provider == "gemini":
+            if provider == "gemini":
                 try:
                     wav_bytes = await gemini_live_tts(
                         text, voice=map_voice(voice, "gemini"),
@@ -1044,7 +1050,7 @@ class FetchIphoneMiddleware:
 
             speech = openai_client.audio.speech.create(
                 model=self.tts_model,
-                voice=voice,
+                voice=map_voice(voice, "openai"),
                 input=text,
                 response_format="mp3",
             )
@@ -1125,7 +1131,10 @@ class FetchIphoneMiddleware:
 
                     if message_type == "conversation_start":
                         await self._start_conversation(
-                            send_json, str(message.get("context") or "")
+                            send_json,
+                            str(message.get("context") or ""),
+                            voice=(str(message.get("voice")) if message.get("voice") else None),
+                            model=(str(message.get("model")) if message.get("model") else None),
                         )
                         continue
                     if message_type == "conversation_stop":

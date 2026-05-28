@@ -345,6 +345,66 @@ def test_mic_chunk_forwarded_to_session() -> None:
     assert session.closed is True
 
 
+def test_conversation_start_forwards_voice_and_model() -> None:
+    _FakeConversationSession.instances = []
+    middleware = iphone_middleware.FetchIphoneMiddleware(conversation_mode="gemini_live")
+
+    with patch("iphone_middleware.LiveConversationSession", _FakeConversationSession):
+        with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
+            ws.receive_json()  # hello
+            ws.send_json({
+                "type": "conversation_start",
+                "context": "hi",
+                "voice": "nova",
+                "model": "gemini-2.5-flash-native-audio-preview-12-2025",
+            })
+            ws.receive_json()  # conversation_state active
+
+    session = _FakeConversationSession.instances[0]
+    assert session.kwargs["voice"] == "nova"
+    assert session.kwargs["model"] == "gemini-2.5-flash-native-audio-preview-12-2025"
+
+
+def test_speak_provider_override_to_openai(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    middleware = iphone_middleware.FetchIphoneMiddleware(tts_provider="gemini", tts_voice="echo")
+    gemini_tts = AsyncMock(return_value=b"RIFF")
+
+    with (
+        patch("iphone_middleware.gemini_live_tts", new=gemini_tts),
+        patch("iphone_middleware.OpenAI") as openai_cls,
+    ):
+        openai_client = openai_cls.return_value
+        openai_client.audio.speech.create.return_value = SimpleNamespace(content=b"mp3bytes")
+        response = TestClient(middleware.server.app).post(
+            "/speak", json={"text": "hi", "provider": "openai", "voice": "nova"}
+        )
+
+    gemini_tts.assert_not_awaited()
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/mpeg"
+    assert openai_client.audio.speech.create.call_args.kwargs["voice"] == "nova"
+
+
+def test_speak_provider_override_to_gemini(monkeypatch) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    middleware = iphone_middleware.FetchIphoneMiddleware(tts_provider="openai", tts_voice="echo")
+    gemini_tts = AsyncMock(return_value=b"RIFFwav")
+
+    with (
+        patch("iphone_middleware.gemini_live_tts", new=gemini_tts),
+        patch("iphone_middleware.OpenAI") as openai_cls,
+    ):
+        response = TestClient(middleware.server.app).post(
+            "/speak", json={"text": "hi", "provider": "gemini", "voice": "echo"}
+        )
+
+    openai_cls.assert_not_called()
+    gemini_tts.assert_awaited_once_with("hi", voice="Charon")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/wav"
+
+
 def test_route_frame_safe_swallows_errors_and_notifies_client() -> None:
     middleware = iphone_middleware.FetchIphoneMiddleware()
     sent: list[dict] = []
