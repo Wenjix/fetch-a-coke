@@ -213,23 +213,23 @@ def test_realtime_client_secret_uses_session_config(monkeypatch) -> None:
     assert response.json()["model"] == "gpt-realtime-2"
 
 
-def test_hello_defaults_to_openai_speak_route() -> None:
+def test_hello_defaults_to_cartesia_speak_route() -> None:
     middleware = iphone_middleware.FetchIphoneMiddleware()
 
     with TestClient(middleware.server.app).websocket_connect("/fetch/ws") as ws:
         hello = ws.receive_json()
 
-    assert hello["tts_provider"] == "openai"
+    assert hello["tts_provider"] == "cartesia"
     assert hello["audio_route"] == "speak"
     assert hello["realtime_enabled"] is False
 
 
-def test_cli_defaults_to_fast_openai_tts(monkeypatch) -> None:
+def test_cli_defaults_to_cartesia_tts(monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["iphone_middleware"])
 
     args = iphone_middleware._parse_args()
 
-    assert args.tts_provider == "openai"
+    assert args.tts_provider == "cartesia"
     assert args.tts_model == "tts-1"
 
 
@@ -460,6 +460,20 @@ def test_speak_cartesia_provider(monkeypatch) -> None:
     cartesia.assert_awaited_once_with("hi", voice=tts.map_voice("echo", "cartesia"))
 
 
+def test_speak_defaults_to_cartesia(monkeypatch) -> None:
+    monkeypatch.setenv("CARTESIA_API_KEY", "cartesia-key")
+    middleware = iphone_middleware.FetchIphoneMiddleware(tts_voice="echo")
+    cartesia = AsyncMock(return_value=b"RIFFwav")
+
+    with patch("iphone_middleware.cartesia_tts", new=cartesia):
+        response = TestClient(middleware.server.app).post("/speak", json={"text": "hi"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/wav"
+    assert response.content == b"RIFFwav"
+    cartesia.assert_awaited_once_with("hi", voice=tts.map_voice("echo", "cartesia"))
+
+
 def test_hello_advertises_cartesia_availability(monkeypatch) -> None:
     monkeypatch.setenv("CARTESIA_API_KEY", "cartesia-key")
     middleware = iphone_middleware.FetchIphoneMiddleware()
@@ -544,11 +558,13 @@ def test_speak_uses_gemini_tts_without_openai_client(monkeypatch) -> None:
     assert response.headers["content-type"] == "audio/wav"
 
 
-def test_save_photo_writes_local_preview_and_icloud_fetch_folder(monkeypatch, tmp_path) -> None:
+def test_save_photo_writes_local_preview_icloud_and_google_drive(monkeypatch, tmp_path) -> None:
     capture_dir = tmp_path / "captures"
     icloud_dir = tmp_path / "iCloud Drive" / "fetch"
+    google_drive_dir = tmp_path / "Google Drive" / "robodog-fetch"
     monkeypatch.setattr(iphone_middleware, "CAPTURE_DIR", capture_dir)
     monkeypatch.setattr(iphone_middleware, "ICLOUD_FETCH_DIR", icloud_dir)
+    monkeypatch.setattr(iphone_middleware, "GOOGLE_DRIVE_FETCH_DIR", google_drive_dir)
     image_bytes = b"fetch-photo"
     encoded = base64.b64encode(image_bytes).decode("ascii")
     middleware = iphone_middleware.FetchIphoneMiddleware()
@@ -564,5 +580,7 @@ def test_save_photo_writes_local_preview_and_icloud_fetch_folder(monkeypatch, tm
     assert payload["url"].startswith("/fetch/static/captures/fetch-")
     assert Path(payload["path"]).read_bytes() == image_bytes
     assert Path(payload["icloud_path"]).read_bytes() == image_bytes
+    assert Path(payload["google_drive_path"]).read_bytes() == image_bytes
     assert Path(payload["path"]).parent == capture_dir
     assert Path(payload["icloud_path"]).parent == icloud_dir
+    assert Path(payload["google_drive_path"]).parent == google_drive_dir

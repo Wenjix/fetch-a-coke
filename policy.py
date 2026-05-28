@@ -22,8 +22,8 @@ from typing import Any, Literal
 
 from openai import OpenAI
 
-ApproachState = Literal["search", "approach", "greet", "wait_for_bottle", "photo_ready", "skip"]
-InteractionPhase = Literal["find_guest", "confirm_bottle"]
+ApproachState = Literal["search", "approach", "greet", "wait_for_coke", "photo_ready", "skip"]
+InteractionPhase = Literal["find_guest", "confirm_coke"]
 Bearing = Literal["left", "center", "right", "unknown"]
 RangeEstimate = Literal["far", "medium", "near", "inside_4m", "inside_1m", "unknown"]
 VisionProvider = Literal["openai", "gemini"]
@@ -143,10 +143,10 @@ def _default_decision(reason: str) -> dict[str, Any]:
         },
         "action": "search",
         "photo_ready": False,
-        "bottle_visible": False,
+        "coke_visible": False,
         "framing": {
             "person_visible": False,
-            "bottle_visible": False,
+            "coke_visible": False,
             "well_framed": False,
             "notes": "",
         },
@@ -220,7 +220,7 @@ def _as_range(value: Any) -> RangeEstimate:
 
 def _clean_spoken_line(line: str) -> str:
     line = re.sub(
-        r"^(?:find[_-]?guest|confirm[_-]?bottle)\b[\s:|\-\u2013\u2014]*",
+        r"^(?:find[_-]?guest|confirm[_-]?coke)\b[\s:|\-\u2013\u2014]*",
         "",
         line.strip(),
         flags=re.IGNORECASE,
@@ -244,12 +244,10 @@ def _truncate_spoken_line(line: str, max_chars: int) -> str:
 
 
 def _mentions_coke_container(lower_line: str) -> bool:
-    if re.search(r"\b(coke|cola|soda|bottle|drink)\b", lower_line):
-        return True
     return (
-        re.search(r"\b(?:coke|cola|soda)\s+can\b", lower_line) is not None
+        re.search(r"\b(?:coke|cola|soda)\b", lower_line) is not None
+        or re.search(r"\b(?:the|a|your|that)\s+(?:can|drink)\b", lower_line) is not None
         or re.search(r"\bcan\s+of\s+(?:coke|cola|soda)\b", lower_line) is not None
-        or re.search(r"\b(?:the|a|your|that)\s+can\b", lower_line) is not None
     )
 
 
@@ -258,7 +256,7 @@ def _ensure_script_line(
     state: ApproachState,
     interaction_phase: InteractionPhase,
 ) -> str:
-    if state not in {"greet", "photo_ready", "wait_for_bottle"}:
+    if state not in {"greet", "photo_ready", "wait_for_coke"}:
         return ""
 
     cleaned = line.strip()
@@ -270,12 +268,12 @@ def _ensure_script_line(
         if has_coke and has_back:
             return cleaned
         instruction = "I will hold still. Grab one Coke from my back, then pose with it for your instant photo."
-    elif interaction_phase == "confirm_bottle" and state == "wait_for_bottle":
+    elif interaction_phase == "confirm_coke" and state == "wait_for_coke":
         has_coke = _mentions_coke_container(lower)
         has_frame = re.search(r"\b(frame|camera|photo|front|center|hold|show)\b", lower) is not None
         if has_coke and has_frame:
             return cleaned
-        instruction = "Hold the Coke can out front and center yourself in the camera frame."
+        instruction = "Hold the Coke out front and center yourself in the camera frame."
     else:
         has_coke = _mentions_coke_container(lower)
         has_cue = re.search(r"\b(cheers|cheese|camera|photo|frame)\b", lower) is not None
@@ -328,27 +326,36 @@ def _normalize_decision(
     bearing = _as_bearing(target.get("bearing"))
     range_estimate = _as_range(target.get("range"))
     safe_to_approach = bool(safety.get("safe_to_approach"))
-    photo_ready = bool(raw.get("photo_ready") or framing.get("well_framed"))
-    bottle_visible = bool(raw.get("bottle_visible") or framing.get("bottle_visible"))
+    target_centered = bearing == "center"
+    coke_visible = bool(raw.get("coke_visible") or framing.get("coke_visible"))
+    person_visible = bool(framing.get("person_visible") or candidate_found)
+    well_framed = bool(framing.get("well_framed"))
+    photo_ready = (
+        bool(raw.get("photo_ready"))
+        and coke_visible
+        and person_visible
+        and well_framed
+        and target_centered
+    )
     line = _clean_spoken_line(str(raw.get("line") or ""))
 
-    if interaction_phase == "confirm_bottle":
+    if interaction_phase == "confirm_coke":
         if photo_ready:
             state: ApproachState = "photo_ready"
         elif candidate_found:
-            state = "wait_for_bottle"
+            state = "wait_for_coke"
         else:
             state = "search"
     elif not candidate_found:
         state: ApproachState = "search"
     elif not safe_to_approach:
         state = "skip"
-    elif range_estimate in {"inside_4m", "inside_1m"}:
+    elif range_estimate in {"inside_4m", "inside_1m"} and target_centered:
         state = "greet"
     else:
         state = "approach"
 
-    if state not in {"greet", "photo_ready", "wait_for_bottle"}:
+    if state not in {"greet", "photo_ready", "wait_for_coke"}:
         line = ""
     else:
         line = _truncate_spoken_line(
@@ -362,14 +369,14 @@ def _normalize_decision(
         cmd = _cmd_for_search()
     else:
         cmd = _default_decision("")["simulated_cmd_vel"]
-    if state in {"greet", "wait_for_bottle", "photo_ready"}:
+    if state in {"greet", "wait_for_coke", "photo_ready"}:
         cmd = {"linear_x": 0.0, "angular_z": 0.0, "duration_s": 0.0}
 
     action_by_state = {
         "search": "search",
         "approach": "approach",
         "greet": "wave_offer",
-        "wait_for_bottle": "coach_photo",
+        "wait_for_coke": "coach_photo",
         "photo_ready": "take_photo_dance",
         "skip": "skip",
     }
@@ -398,10 +405,10 @@ def _normalize_decision(
             "photo": bool(offer.get("photo", True)),
         },
         "photo_ready": photo_ready,
-        "bottle_visible": bottle_visible,
+        "coke_visible": coke_visible,
         "framing": {
             "person_visible": bool(framing.get("person_visible", candidate_found)),
-            "bottle_visible": bottle_visible,
+            "coke_visible": coke_visible,
             "well_framed": photo_ready,
             "notes": str(framing.get("notes") or ""),
         },
@@ -474,20 +481,23 @@ class FetchPolicy:
         if depth_hint:
             depth_note = f"Depth hint from client: {json.dumps(depth_hint, sort_keys=True)}"
 
-        if interaction_phase == "confirm_bottle":
+        if interaction_phase == "confirm_coke":
             goal = """
-Current phase: confirm_bottle.
-- The dog has already waved and told the person to take one Coke can from the dog's back.
-- Look for the same or primary person holding a Coke can, Coke bottle, soda can, or clearly bottle-shaped drink from the dog's back.
-- The person and Coke must both be visible and well framed for a photo. Prefer face/upper body plus the Coke held out front; reject if the Coke is cropped out, hidden, or too blurry.
-- If ready, set photo_ready true, action "take_photo_dance", and line to a short photographer cue that tells them to hold the Coke up/front and says "cheers", "cheese", or a funny camera phrase.
-- If the person is visible but the Coke is missing or framing is bad, set candidate_found true, photo_ready false, action "coach_photo", and line to one clear instruction: take/hold the Coke can, put it in front, and move/center themselves for the camera.
+Current phase: confirm_coke.
+- The dog has already waved and told the person it will hold still while they take one Coke from the dog's back.
+- Look for the same or primary person holding the Coke. Any visible Coke package counts; do not force a specific package type.
+- The person and Coke must both be clearly visible and well framed for a photo. Prefer face/upper body plus the Coke held out front.
+- Do not set photo_ready true unless you can clearly see the person holding the Coke, it is not cropped out, hidden, or blurry, and the person is centered in the frame rather than near an edge.
+- If ready, set photo_ready true, coke_visible true, framing.coke_visible true, framing.person_visible true, framing.well_framed true, action "take_photo_dance", and line to a short photographer cue that says "cheers", "cheese", or a funny camera phrase.
+- If the person is visible but the Coke is missing, hidden, cropped, blurry, not out front, or the person is near the edge of frame, set candidate_found true, photo_ready false, action "coach_photo", and line to one clear instruction: take/hold the Coke, put it in front, and move/center themselves for the camera.
 """
         else:
             goal = """
 Current phase: find_guest.
 - Find the single best visible target for a Coca-Cola marketing robot dog offering one free Coke in exchange for an instant photo.
 - Pick anyone who looks chill and likely to enjoy the bit: visibly thirsty, curious, amused, playful, social, looking toward the dog/camera, or otherwise like they would be in for a good laugh and a photo.
+- Only address someone who is looking toward the dog/camera or visibly oriented toward it. Do not target people with their back turned, walking away, facing another direction, or otherwise not aware of the dog.
+- Only address a person who is near the middle of the frame. Do not greet someone on the far left/right edge or partially cropped; keep searching or approach/recenter first.
 - Do not require the person to be lying down, reclining, alone, empty-handed, or fully idle.
 - Phone, book, laptop, food, or existing drink are not automatic rejects. Treat them as weak busy signals only when the person looks engrossed, unavailable, or likely to be annoyed.
 - Prefer open posture, visible face/upper body, a clear path, and enough room to stop safely.
@@ -507,6 +517,8 @@ Safety and privacy:
 - Do not identify people or infer sensitive traits.
 - Do not comment on race, ethnicity, gender, age, disability, body size, attractiveness, or medical state.
 - Avoid insults and body-shaming. Keep humor based on visible, non-sensitive details: setting, posture, lighting, colors, bags, objects nearby, or what is happening in the scene.
+- Humor persona: confessional, observational, self-deprecating, and a little exasperated by ordinary life. Notice tiny absurdities in beach posture, drink logistics, awkward posing, and being a small robot dog with soda on its back. Tease your own situation first; if you tease the guest, keep it gentle and based only on visible context.
+- The joke can sound dry, candid, and mildly annoyed at the universe, but it must land as playful hospitality, not contempt. Do not use cruel, sexual, hateful, or shock humor.
 - The line must be specific to this frame. Mention at least one concrete visible detail from the person or scene. Do not write generic lines like "Want a drink or photo?" or "You look thirsty."
 - The line is spoken aloud. Do not include markdown, asterisks, phase labels, narration, or stage directions such as waving; the robot wave and photo sound are handled separately.
 - Keep the line friendly and directive: the person should always know the next physical step.
@@ -535,10 +547,10 @@ Return only JSON with this shape:
   }},
   "action": "search|approach|wave_offer|coach_photo|take_photo_dance|skip",
   "photo_ready": false,
-  "bottle_visible": false,
+  "coke_visible": false,
   "framing": {{
     "person_visible": true,
-    "bottle_visible": false,
+    "coke_visible": false,
     "well_framed": false,
     "notes": "short framing notes"
   }},

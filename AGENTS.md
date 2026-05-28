@@ -58,7 +58,7 @@ Tests mock provider clients via `unittest.mock.patch` and local module stubs —
 ### State Machine
 
 ```
-search → approach → greet → wait_for_bottle → photo_ready
+search → approach → greet → wait_for_coke → photo_ready
   ↓                                          ↑
   └──────────────── skip ←───────────────────┘
 ```
@@ -66,13 +66,13 @@ search → approach → greet → wait_for_bottle → photo_ready
 - **search**: Scan left/right (angular_z != 0) looking for a candidate.
 - **approach**: Move toward target (linear_x > 0, bearing-based angular_z).
 - **greet** (inside_4m): Wave and deliver personalized joke/offer line.
-- **wait_for_bottle**: Person hasn't framed the bottle yet; coach them.
-- **photo_ready**: Bottle and person well-framed; take photo and dance.
+- **wait_for_coke**: Person hasn't framed the Coke yet; coach them.
+- **photo_ready**: Coke and person well-framed; take photo and dance.
 - **skip**: Unsafe or blocked; resume searching.
 
 Two **interaction phases** drive different prompts:
 - `find_guest`: The default — locate and evaluate a beachgoer.
-- `confirm_bottle`: After greeting — check if the person is holding the bottle and ready for a photo.
+- `confirm_coke`: After greeting — check if the person is holding the Coke and ready for a photo.
 
 ### File Roles
 

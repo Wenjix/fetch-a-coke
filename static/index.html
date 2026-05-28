@@ -2030,10 +2030,11 @@
       }
 
       aside {
-        grid-template-rows: auto auto;
-        align-content: start;
+        grid-template-rows: auto minmax(0, 1fr);
+        align-content: stretch;
         gap: 14px;
-        overflow: visible;
+        min-height: 0;
+        overflow: hidden;
       }
 
       .photo {
@@ -2116,20 +2117,50 @@
       }
 
       .events-panel {
-        max-height: 116px;
-        align-self: start;
+        display: grid;
+        grid-template-rows: minmax(0, 1fr);
+        align-self: stretch;
+        min-height: 0;
+        max-height: none;
+        overflow: hidden;
       }
 
       .log {
-        max-height: 116px;
-        padding: 0 12px;
+        display: block;
+        min-height: 0;
+        max-height: none;
+        height: 100%;
+        padding: 4px 12px 0;
+        overflow-y: auto;
+        overflow-x: hidden;
         color: oklch(75% 0.012 225);
+      }
+
+      .log-row {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+        min-height: 0;
+        padding: 6px 0;
+        border-bottom: 0 !important;
       }
 
       .log-time,
       .log-message {
         color: oklch(75% 0.012 225);
         font-weight: 400;
+        line-height: 1.34;
+      }
+
+      .log-time {
+        white-space: nowrap;
+      }
+
+      .log-message {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: normal;
       }
 
       .header-metrics .status,
@@ -2647,7 +2678,7 @@
         realtimeSessionPromise: null,
         realtimePending: null,
         realtimeDisabled: false,
-        ttsProvider: "openai",
+        ttsProvider: "cartesia",
         audioRoute: "speak",
         realtimeAvailable: false,
         conversationEnabled: false,
@@ -2804,7 +2835,7 @@
         if (message.state === "approach") {
           return `I found a good target.${targetText} I’m rolling over now.`;
         }
-        if (message.state === "wait_for_bottle") {
+        if (message.state === "wait_for_coke") {
           return "Hold that Coke up for me. I’m lining up the shot.";
         }
         if (message.state === "photo_ready") {
@@ -3061,13 +3092,13 @@
 
         if (
           (message.state === "photo_ready" || message.action === "take_photo_dance") &&
-          state.workflow === "confirm_bottle"
+          state.workflow === "confirm_coke"
         ) {
           await completePhoto(message);
           return;
         }
 
-        if (message.state === "wait_for_bottle" && message.line && state.workflow === "confirm_bottle") {
+        if (message.state === "wait_for_coke" && message.line && state.workflow === "confirm_coke") {
           await speakOnce(message.line, "coached photo pose");
         }
       }
@@ -3177,7 +3208,7 @@
           if (state.micStream) {
             state.conversationActive = true;
             state.lastConvFrameAt = Date.now();
-            setWorkflow("confirm_bottle", "Live conversation: one Coke for a photo.");
+            setWorkflow("confirm_coke", "Live conversation: one Coke for a photo.");
             if (state.ws && state.ws.readyState === WebSocket.OPEN) {
               state.ws.send(JSON.stringify({
                 type: "conversation_start",
@@ -3194,13 +3225,13 @@
         log("wave and Coke-for-photo offer");
         await presentHandoffPose();
         await speakOnce(oneCokeOfferLine(message.line), "spoke Coke-for-photo offer");
-        setWorkflow("confirm_bottle", "Hold that Coke up for me. I’m lining up the shot.");
+        setWorkflow("confirm_coke", "Hold that Coke up for me. I’m lining up the shot.");
       }
 
       async function completePhoto(message) {
         const result = await runPhotoSequence({
           cue: "Three, two, one, cheers.",
-          doneLine: "Got it. Your photo is saved to iCloud. Tiny victory dance, then I’m off.",
+          doneLine: "Got it. Your photo is ready. Tiny victory dance, then I’m off.",
           doneLog: "spoke photo pickup cue",
         });
         if (!result.ok) {

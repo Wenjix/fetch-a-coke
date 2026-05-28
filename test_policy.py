@@ -189,12 +189,27 @@ def test_photo_coaching_line_mentions_coke_and_frame() -> None:
     decision = policy._normalize_decision(
         raw,
         policy.FetchPolicyConfig(),
-        interaction_phase="confirm_bottle",
+        interaction_phase="confirm_coke",
     )
 
-    assert decision["state"] == "wait_for_bottle"
+    assert decision["state"] == "wait_for_coke"
     assert "Coke" in decision["line"]
     assert "frame" in decision["line"]
+
+
+def test_photo_coaching_line_keeps_holding_the_coke_wording() -> None:
+    raw = _raw_decision()
+    raw["line"] = "Hold the Coke in the frame."
+    raw["photo_ready"] = False
+
+    decision = policy._normalize_decision(
+        raw,
+        policy.FetchPolicyConfig(),
+        interaction_phase="confirm_coke",
+    )
+
+    assert decision["state"] == "wait_for_coke"
+    assert decision["line"] == "Hold the Coke in the frame."
 
 
 def test_photo_ready_line_gives_photographer_cue() -> None:
@@ -203,7 +218,7 @@ def test_photo_ready_line_gives_photographer_cue() -> None:
     raw["photo_ready"] = True
     raw["framing"] = {
         "person_visible": True,
-        "bottle_visible": True,
+        "coke_visible": True,
         "well_framed": True,
         "notes": "person and can centered",
     }
@@ -211,12 +226,105 @@ def test_photo_ready_line_gives_photographer_cue() -> None:
     decision = policy._normalize_decision(
         raw,
         policy.FetchPolicyConfig(),
-        interaction_phase="confirm_bottle",
+        interaction_phase="confirm_coke",
     )
 
     assert decision["state"] == "photo_ready"
     assert "Coke" in decision["line"]
     assert "Cheers" in decision["line"]
+
+
+def test_photo_not_ready_without_visible_coke_even_if_framed() -> None:
+    raw = _raw_decision()
+    raw["line"] = "Perfect."
+    raw["photo_ready"] = True
+    raw["coke_visible"] = False
+    raw["framing"] = {
+        "person_visible": True,
+        "coke_visible": False,
+        "well_framed": True,
+        "notes": "person centered but no can visible",
+    }
+
+    decision = policy._normalize_decision(
+        raw,
+        policy.FetchPolicyConfig(),
+        interaction_phase="confirm_coke",
+    )
+
+    assert decision["state"] == "wait_for_coke"
+    assert decision["photo_ready"] is False
+    assert decision["action"] == "coach_photo"
+    assert "Coke" in decision["line"]
+    assert "frame" in decision["line"]
+
+
+def test_photo_not_ready_when_coke_visible_but_not_framed() -> None:
+    raw = _raw_decision()
+    raw["line"] = "I can see the Coke."
+    raw["photo_ready"] = True
+    raw["coke_visible"] = True
+    raw["framing"] = {
+        "person_visible": True,
+        "coke_visible": True,
+        "well_framed": False,
+        "notes": "can visible but person is cropped",
+    }
+
+    decision = policy._normalize_decision(
+        raw,
+        policy.FetchPolicyConfig(),
+        interaction_phase="confirm_coke",
+    )
+
+    assert decision["state"] == "wait_for_coke"
+    assert decision["photo_ready"] is False
+    assert decision["action"] == "coach_photo"
+    assert "Coke" in decision["line"]
+    assert "frame" in decision["line"]
+
+
+def test_greet_requires_centered_target() -> None:
+    raw = _raw_decision()
+    raw["target"] = {
+        **raw["target"],  # type: ignore[arg-type]
+        "bearing": "left",
+        "range": "inside_4m",
+    }
+
+    decision = policy._normalize_decision(raw, policy.FetchPolicyConfig())
+
+    assert decision["state"] == "approach"
+    assert decision["line"] == ""
+
+
+def test_photo_not_ready_when_person_on_edge() -> None:
+    raw = _raw_decision()
+    raw["target"] = {
+        **raw["target"],  # type: ignore[arg-type]
+        "bearing": "left",
+        "range": "inside_4m",
+    }
+    raw["line"] = "Perfect."
+    raw["photo_ready"] = True
+    raw["coke_visible"] = True
+    raw["framing"] = {
+        "person_visible": True,
+        "coke_visible": True,
+        "well_framed": True,
+        "notes": "person is near the edge",
+    }
+
+    decision = policy._normalize_decision(
+        raw,
+        policy.FetchPolicyConfig(),
+        interaction_phase="confirm_coke",
+    )
+
+    assert decision["state"] == "wait_for_coke"
+    assert decision["photo_ready"] is False
+    assert decision["action"] == "coach_photo"
+    assert "Coke" in decision["line"]
 
 
 def test_gemini_retries_without_json_mode_if_unsupported(monkeypatch) -> None:

@@ -8,18 +8,20 @@ WebSocket, and the server returns motion/speech/photo decisions.
 ## Behavior
 
 1. Run the robot preflight: recovery stand, balance stand, and joystick handoff.
-2. Actively look around by turning in place until a good Coke/photo target is visible: anyone who looks chill, thirsty, amused, curious, playful, social, or likely to enjoy a free Coke from a robot dog.
+2. Actively look around by turning in place until a good Coke/photo target is visible: someone centered in frame and looking toward the dog who seems chill, thirsty, amused, curious, playful, social, or likely to enjoy a free Coke from a robot dog.
 3. Treat phone, book, laptop, food, or drink as weak busy signals only when the person looks engrossed or unavailable.
 4. Approach only if the path looks safe.
 5. Stop once the target is within 4 meters.
 6. Wave and say a personalized joke based on visible, non-sensitive appearance/context.
-7. Tell the person to take a Coke can from the dog's back first, then pose for an instant photo.
-8. Coach them to hold the Coke can out front and center themselves in the frame.
-9. Say a photographer cue, save the photo to iCloud Drive's `fetch` folder, play a print sound, tell them the photo is ready on the dog's head, and trigger a dance.
+7. Tell the person to take a Coke from the dog's back first, then pose for an instant photo.
+8. Coach them to hold the Coke out front and center themselves in the frame.
+9. Say a photographer cue, save the photo, play a print sound, tell them the photo is ready, and trigger a dance.
 
 The prototype does not infer identity or sensitive traits. Humor is constrained to
 visible non-sensitive context such as setting, posture, lighting, colors, bags,
-objects nearby, or what is happening in the scene.
+objects nearby, or what is happening in the scene. Fetch's comedy voice is
+confessional, observational, self-deprecating, and mildly exasperated by the
+absurdity of ordinary beach logistics and being a tiny robot dog carrying soda.
 
 ## Run
 
@@ -78,7 +80,8 @@ The adapter exposes:
 
 Saved photos are written to both the local preview folder under
 `static/captures` and `~/Library/Mobile Documents/com~apple~CloudDocs/fetch`
-so they sync through iCloud Drive.
+so they sync through iCloud Drive. They are also mirrored into
+`~/Library/CloudStorage/GoogleDrive-seifip@gmail.com/My Drive/robodog-fetch`.
 
 Record3D frames are analyzed with the RGB image plus a `depth_hint` containing
 center-depth and near-object summaries in meters. The default OpenAI vision model
@@ -99,18 +102,18 @@ python -m dimos.experimental.fetch.iphone_middleware \
 
 Gemini defaults to `gemini-3.5-flash`; pass `--model` only to override it.
 `GOOGLE_API_KEY` is also accepted as a fallback for Gemini. Browser audio
-defaults to OpenAI TTS; pass `--tts-provider gemini` only to use Gemini Live
-TTS instead.
+defaults to Cartesia Sonic TTS; pass `--tts-provider gemini` to use Gemini Live
+TTS or `--tts-provider openai` to use OpenAI TTS instead.
 
 ## Audio
 
 Browser speech uses `/speak` by default. The default `/speak` provider is
-OpenAI TTS with `tts-1` for the lowest-latency speech path and requires
+Cartesia Sonic (`sonic-3.5-2026-05-04`) and requires `CARTESIA_API_KEY`.
+With `--tts-provider openai`, `/speak` uses OpenAI TTS with `tts-1` and requires
 `OPENAI_API_KEY`. With `--tts-provider gemini`, `/speak` uses Gemini Live TTS
 (`gemini-3.1-flash-live-preview`) and requires `GEMINI_API_KEY` or
-`GOOGLE_API_KEY`. With `--tts-provider cartesia`, `/speak` uses Cartesia Sonic
-(`sonic-3.5-2026-05-04`) and requires `CARTESIA_API_KEY`. `/speak` also accepts a
-per-request `provider` so the browser modal can switch at runtime.
+`GOOGLE_API_KEY`. `/speak` also accepts a per-request `provider` so the browser
+modal can switch at runtime.
 
 OpenAI Realtime WebRTC is optional. Enable it explicitly with
 `--tts-provider openai --enable-realtime`; the browser will try Realtime first
@@ -179,9 +182,10 @@ How it works:
   the dog's back), `take_photo` (waits for the browser capture result),
   `celebrate` (goodbye + dance), `do_trick`, and `stop_and_reset`. There is no
   mechanical dispenser.
-- Photo framing reuses the existing vision `confirm_bottle` policy: framing results
+- Photo framing reuses the existing vision `confirm_coke` policy: framing results
   are injected into the live session as hints so the dog's spoken coaching matches
-  what the camera sees, and the photo fires when the shot is well framed.
+  what the camera sees. The photo fires only when the person is centered,
+  clearly holding the Coke, and the shot is well framed.
 - The conversation persona, menu, and safety rules live in `conversation_prompt.py`
   and mirror the vision policy in `policy.py`.
 
@@ -261,10 +265,10 @@ the modal — it remains a separate launch flag (`--enable-realtime`).
   },
   "action": "wave_offer",
   "photo_ready": false,
-  "bottle_visible": false,
+  "coke_visible": false,
   "framing": {
     "person_visible": true,
-    "bottle_visible": false,
+    "coke_visible": false,
     "well_framed": false,
     "notes": ""
   },
