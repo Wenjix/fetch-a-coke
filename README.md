@@ -140,6 +140,58 @@ dedicated `/v1/realtime/translations` flow for continuous live interpretation,
 while Fetch currently only needs one-way dog speech for generated offer and
 photo-coaching lines.
 
+## Live Conversation (Coke vendor)
+
+By default Fetch only *speaks* (one-way TTS). With `--conversation-mode gemini_live`
+the dog instead holds a real two-way voice conversation once it reaches a person:
+it tells a joke, **takes a drink order**, coaches the photo, takes the picture, and
+celebrates — all driven by a persistent Gemini Live session with tool calling.
+
+```bash
+export GEMINI_API_KEY=<YOUR_KEY>
+python -m dimos.experimental.fetch.iphone_middleware \
+  --host 0.0.0.0 \
+  --port 8455 \
+  --vision-provider gemini \
+  --conversation-mode gemini_live \
+  --robot-ip 192.168.12.1 \
+  --robot-connection-method local_ap
+```
+
+How it works:
+
+- The vision state machine still drives `search → approach → greet`. At `greet` the
+  browser waves, opens the phone microphone, and hands off to a persistent
+  conversation session on the server.
+- The browser streams microphone audio (16 kHz PCM) to the server over the existing
+  `/fetch/ws` WebSocket; the server runs one `LiveConversationSession`
+  (`conversation.py`) per interaction and streams the dog's voice (24 kHz PCM) back
+  for playback. Turn-taking uses the Live API's server-side voice activity
+  detection, and talking over the dog triggers barge-in.
+- The model drives the dog through **tool calls**: `take_order` (records quantity —
+  Coke only; the customer grabs a can from the dog's back), `take_photo`,
+  `celebrate` (goodbye + dance), `do_trick`, and `stop_and_reset`. There is no
+  mechanical dispenser.
+- Photo framing reuses the existing vision `confirm_bottle` policy: framing results
+  are injected into the live session as hints so the dog's spoken coaching matches
+  what the camera sees, and the photo fires when the shot is well framed.
+- The conversation persona, menu, and safety rules live in `conversation_prompt.py`
+  and mirror the vision policy in `policy.py`.
+
+Requirements and notes:
+
+- Requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`. The conversation model defaults to
+  `gemini-3.1-flash-live-preview`; override with `--conversation-model`.
+- The browser needs a secure context for microphone access, so run over HTTPS
+  (the default). `--no-ssl` disables the microphone.
+- The WebSocket `hello` advertises `audio_route: "gemini_live_conversation"` and
+  `conversation_enabled: true` so the browser knows to capture the mic. The
+  conversation adds these `/fetch/ws` message types: browser → server
+  `conversation_start`, `mic_chunk`, `conversation_stop`; server → browser
+  `audio_out`, `transcript`, `interrupted`, `conversation_state`.
+- If a conversation stalls for ~30 s, or the customer declines or walks away, the
+  dog resets and resumes scanning.
+
 ## WebSocket Frame
 
 ```json
