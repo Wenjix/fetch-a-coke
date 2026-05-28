@@ -2216,6 +2216,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        padding: var(--space-md);
       }
       .audio-modal[hidden] {
         display: none;
@@ -2223,48 +2224,186 @@
       .audio-modal-backdrop {
         position: absolute;
         inset: 0;
-        background: rgba(0, 0, 0, 0.55);
+        background: oklch(8% 0.014 175 / 0.62);
+        animation: audio-fade 160ms ease-out;
       }
       .audio-modal-card {
         position: relative;
-        width: min(420px, 92vw);
+        width: min(440px, 100%);
+        max-height: calc(100dvh - 2 * var(--space-md));
+        overflow-y: auto;
         display: flex;
         flex-direction: column;
-        gap: 14px;
-        padding: 20px;
+        gap: var(--space-md);
+        padding: var(--space-lg);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        animation: audio-rise 180ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .audio-modal-head {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
       }
       .audio-modal-title {
         margin: 0;
+        font-family: var(--font-display);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: var(--ink);
+      }
+      .audio-modal-sub {
+        margin: 0;
+        font-size: 13px;
+        color: var(--faint);
+      }
+      .audio-group-label {
+        display: block;
+        margin-bottom: var(--space-xs);
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--faint);
       }
       .audio-modes {
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        border-radius: 6px;
-        padding: 10px 12px;
+        gap: var(--space-xs);
+        border: 0;
+        margin: 0;
+        padding: 0;
       }
-      .audio-modes label {
-        display: flex;
+      .audio-mode {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
         align-items: center;
-        gap: 8px;
+        gap: var(--space-sm);
+        min-height: 56px;
+        padding: var(--space-sm) var(--space-md);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: color-mix(in oklch, var(--panel-strong) 55%, transparent);
+        cursor: pointer;
+        transition: border-color 160ms ease-out, background 160ms ease-out;
       }
-      .audio-modes label.disabled {
-        opacity: 0.45;
+      .audio-mode:hover:not(.disabled) {
+        border-color: var(--line-strong);
+        background: var(--panel-strong);
+      }
+      .audio-mode:has(input:checked) {
+        border-color: color-mix(in oklch, var(--accent) 70%, var(--line));
+        background: color-mix(in oklch, var(--accent) 14%, var(--panel-strong));
+      }
+      .audio-mode:has(input:focus-visible) {
+        box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 30%, transparent);
+      }
+      .audio-mode.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .audio-mode input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+      }
+      .audio-mode-body {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+      }
+      .audio-mode-name {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--ink);
+      }
+      .audio-mode-desc {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .audio-status {
+        font-family: var(--font-display);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 3px 8px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+      .audio-status[data-ready="true"] {
+        color: var(--ok);
+        background: color-mix(in oklch, var(--ok) 16%, transparent);
+      }
+      .audio-status[data-ready="false"] {
+        color: var(--amber);
+        background: color-mix(in oklch, var(--amber) 14%, transparent);
+      }
+      .audio-fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-md);
       }
       .audio-field {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: var(--space-xs);
+        min-width: 0;
+      }
+      .audio-field-label {
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--faint);
       }
       .audio-field select {
-        padding: 6px 8px;
+        width: 100%;
+        min-height: 44px;
+        padding: 0 var(--space-sm);
+        border: 1px solid var(--line);
         border-radius: 6px;
+        background: var(--panel-strong);
+        color: var(--ink);
+        font-family: var(--font-body);
+        font-size: 14px;
+      }
+      .audio-field select:hover:not(:disabled) {
+        border-color: var(--line-strong);
+      }
+      .audio-field.disabled {
+        opacity: 0.5;
       }
       .audio-modal-actions {
         display: flex;
         justify-content: flex-end;
-        gap: 8px;
+        gap: var(--space-sm);
+        margin-top: var(--space-xs);
+      }
+      @keyframes audio-fade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes audio-rise {
+        from { opacity: 0; transform: translateY(8px) scale(0.98); }
+        to { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .audio-modal-backdrop,
+        .audio-modal-card {
+          animation: none;
+        }
+      }
+      @media (max-width: 480px) {
+        .audio-fields {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
@@ -2344,35 +2483,68 @@
       </aside>
     </main>
 
-    <div id="audioModal" class="audio-modal" hidden>
+    <div id="audioModal" class="audio-modal" hidden role="dialog" aria-modal="true" aria-labelledby="audioModalTitle">
       <div class="audio-modal-backdrop" data-close="1"></div>
-      <div class="audio-modal-card bp5-card">
-        <h3 class="audio-modal-title">Audio settings</h3>
-        <fieldset class="audio-modes">
-          <legend>Mode</legend>
-          <label><input type="radio" name="audioMode" value="live" /> Live conversation</label>
-          <label><input type="radio" name="audioMode" value="gemini_tts" /> Gemini TTS (one-way)</label>
-          <label><input type="radio" name="audioMode" value="openai_tts" /> OpenAI TTS (needs OPENAI_API_KEY)</label>
-        </fieldset>
-        <label class="audio-field">Voice
-          <select id="audioVoice">
-            <option value="alloy">alloy</option>
-            <option value="echo">echo</option>
-            <option value="fable">fable</option>
-            <option value="onyx">onyx</option>
-            <option value="nova">nova</option>
-            <option value="shimmer">shimmer</option>
-          </select>
-        </label>
-        <label class="audio-field">Live model
-          <select id="audioLiveModel">
-            <option value="gemini-3.1-flash-live-preview">gemini-3.1-flash-live-preview</option>
-            <option value="gemini-2.5-flash-native-audio-preview-12-2025">gemini-2.5-flash-native-audio</option>
-          </select>
-        </label>
+      <div class="audio-modal-card">
+        <div class="audio-modal-head">
+          <h2 id="audioModalTitle" class="audio-modal-title">Voice &amp; model</h2>
+          <p class="audio-modal-sub">How Fetch talks to people during an interaction.</p>
+        </div>
+
+        <div>
+          <span class="audio-group-label" id="audioModeLabel">Mode</span>
+          <div class="audio-modes" role="radiogroup" aria-labelledby="audioModeLabel">
+            <label class="audio-mode" data-mode="live">
+              <input type="radio" name="audioMode" value="live" />
+              <span class="audio-mode-body">
+                <span class="audio-mode-name">Live conversation</span>
+                <span class="audio-mode-desc">Two-way voice: jokes, takes the order, photo</span>
+              </span>
+              <span class="audio-status" data-mode-status="live" data-ready="true">Ready</span>
+            </label>
+            <label class="audio-mode" data-mode="gemini_tts">
+              <input type="radio" name="audioMode" value="gemini_tts" />
+              <span class="audio-mode-body">
+                <span class="audio-mode-name">Gemini TTS</span>
+                <span class="audio-mode-desc">One-way spoken lines, Gemini voice</span>
+              </span>
+              <span class="audio-status" data-mode-status="gemini_tts" data-ready="true">Ready</span>
+            </label>
+            <label class="audio-mode" data-mode="openai_tts">
+              <input type="radio" name="audioMode" value="openai_tts" />
+              <span class="audio-mode-body">
+                <span class="audio-mode-name">OpenAI TTS</span>
+                <span class="audio-mode-desc">One-way spoken lines, OpenAI voice</span>
+              </span>
+              <span class="audio-status" data-mode-status="openai_tts" data-ready="true">Ready</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="audio-fields">
+          <label class="audio-field">
+            <span class="audio-field-label">Voice</span>
+            <select id="audioVoice">
+              <option value="alloy">Alloy</option>
+              <option value="echo">Echo</option>
+              <option value="fable">Fable</option>
+              <option value="onyx">Onyx</option>
+              <option value="nova">Nova</option>
+              <option value="shimmer">Shimmer</option>
+            </select>
+          </label>
+          <label class="audio-field" id="audioModelField">
+            <span class="audio-field-label">Live model</span>
+            <select id="audioLiveModel">
+              <option value="gemini-3.1-flash-live-preview">gemini-3.1-flash-live-preview</option>
+              <option value="gemini-2.5-flash-native-audio-preview-12-2025">gemini-2.5-flash-native-audio</option>
+            </select>
+          </label>
+        </div>
+
         <div class="audio-modal-actions">
           <button id="audioCancel" class="bp5-button" type="button" data-close="1">Cancel</button>
-          <button id="audioSave" class="bp5-button bp5-intent-primary" type="button">Save</button>
+          <button id="audioSave" class="bp5-button primary" type="button">Save</button>
         </div>
       </div>
     </div>
@@ -2466,6 +2638,7 @@
         liveModel: "gemini-3.1-flash-live-preview",
         openaiAvailable: false,
         geminiAvailable: false,
+        audioModalOpener: null,
       };
 
       const REALTIME_CLIENT_SECRET_TIMEOUT_MS = 5000;
@@ -3275,13 +3448,30 @@
         } catch {}
       }
 
+      function audioModeStatus(mode) {
+        // {available, label} per mode. Live needs the conversation flag AND a
+        // Gemini key; each TTS route needs its own provider key. The label tells
+        // the user exactly what is missing rather than just greying the row out.
+        if (mode === "live") {
+          if (!state.conversationEnabled) return { available: false, label: "Server flag off" };
+          if (!state.geminiAvailable) return { available: false, label: "Needs Gemini key" };
+          return { available: true, label: "Ready" };
+        }
+        if (mode === "gemini_tts") {
+          return state.geminiAvailable
+            ? { available: true, label: "Ready" }
+            : { available: false, label: "Needs Gemini key" };
+        }
+        if (mode === "openai_tts") {
+          return state.openaiAvailable
+            ? { available: true, label: "Ready" }
+            : { available: false, label: "Needs OpenAI key" };
+        }
+        return { available: false, label: "Unavailable" };
+      }
+
       function audioModeAvailable(mode) {
-        // Live needs the conversation flag AND a Gemini key; each TTS route needs
-        // its own provider key. Availability comes from the hello message.
-        if (mode === "live") return state.conversationEnabled && state.geminiAvailable;
-        if (mode === "openai_tts") return state.openaiAvailable;
-        if (mode === "gemini_tts") return state.geminiAvailable;
-        return false;
+        return audioModeStatus(mode).available;
       }
 
       function defaultAudioMode() {
@@ -3306,10 +3496,15 @@
         AUDIO_MODES.forEach((mode) => {
           const radio = els.audioModal.querySelector(`input[value="${mode}"]`);
           if (!radio) return;
-          const available = audioModeAvailable(mode);
-          radio.disabled = !available;
-          const label = radio.closest("label");
-          if (label) label.classList.toggle("disabled", !available);
+          const status = audioModeStatus(mode);
+          radio.disabled = !status.available;
+          const row = radio.closest(".audio-mode");
+          if (row) row.classList.toggle("disabled", !status.available);
+          const badge = els.audioModal.querySelector(`[data-mode-status="${mode}"]`);
+          if (badge) {
+            badge.textContent = status.label;
+            badge.dataset.ready = String(status.available);
+          }
         });
         const modeRadio = els.audioModal.querySelector(
           `input[name="audioMode"][value="${state.audioMode}"]`,
@@ -3317,16 +3512,33 @@
         if (modeRadio) modeRadio.checked = true;
         if (els.audioVoice) els.audioVoice.value = state.voice;
         if (els.audioLiveModel) els.audioLiveModel.value = state.liveModel;
-        if (els.audioSettings) els.audioSettings.textContent = `Audio: ${audioModeLabel(state.audioMode)}`;
+        // The live model only matters when Live is usable.
+        const liveReady = audioModeStatus("live").available;
+        const modelField = els.audioModal.querySelector("#audioModelField");
+        if (els.audioLiveModel) els.audioLiveModel.disabled = !liveReady;
+        if (modelField) modelField.classList.toggle("disabled", !liveReady);
+        if (els.audioSettings) {
+          els.audioSettings.textContent = `Audio: ${audioModeLabel(state.audioMode)}`;
+        }
       }
 
       function openAudioModal() {
         refreshAudioModal();
+        state.audioModalOpener = document.activeElement;
         els.audioModal.hidden = false;
+        const focusTarget =
+          els.audioModal.querySelector('input[name="audioMode"]:checked:not(:disabled)') ||
+          els.audioModal.querySelector('input[name="audioMode"]:not(:disabled)') ||
+          els.audioSave;
+        if (focusTarget) focusTarget.focus();
       }
 
       function closeAudioModal() {
         els.audioModal.hidden = true;
+        if (state.audioModalOpener && typeof state.audioModalOpener.focus === "function") {
+          state.audioModalOpener.focus();
+        }
+        state.audioModalOpener = null;
       }
 
       function saveAudioSettings() {
@@ -4229,6 +4441,11 @@
       els.audioSave.addEventListener("click", saveAudioSettings);
       els.audioModal.addEventListener("click", (event) => {
         if (event.target.dataset && event.target.dataset.close) {
+          closeAudioModal();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !els.audioModal.hidden) {
           closeAudioModal();
         }
       });
