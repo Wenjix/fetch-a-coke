@@ -8,7 +8,7 @@ WebSocket, and the server returns motion/speech/photo decisions.
 ## Behavior
 
 1. Run the robot preflight: recovery stand, balance stand, and joystick handoff.
-2. Search for the best visible Coke/photo target: anyone who looks chill, thirsty, amused, curious, playful, social, or likely to enjoy a free Coke from a robot dog.
+2. Actively look around by turning in place until a good Coke/photo target is visible: anyone who looks chill, thirsty, amused, curious, playful, social, or likely to enjoy a free Coke from a robot dog.
 3. Treat phone, book, laptop, food, or drink as weak busy signals only when the person looks engrossed or unavailable.
 4. Approach only if the path looks safe.
 5. Stop once the target is within 4 meters.
@@ -103,7 +103,7 @@ TTS instead.
 Browser speech uses `/speak` by default. The default `/speak` provider is
 Gemini Live TTS (`gemini-3.1-flash-live-preview`) and requires
 `GEMINI_API_KEY` or `GOOGLE_API_KEY`. With `--tts-provider openai`, `/speak`
-uses OpenAI TTS and requires `OPENAI_API_KEY`.
+uses OpenAI TTS with `gpt-4o-mini-tts` by default and requires `OPENAI_API_KEY`.
 
 OpenAI Realtime WebRTC is optional. Enable it explicitly with
 `--tts-provider openai --enable-realtime`; the browser will try Realtime first

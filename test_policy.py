@@ -89,6 +89,36 @@ def test_invalid_image_url_returns_default_without_client(monkeypatch) -> None:
     openai_cls.assert_not_called()
     assert decision["state"] == "search"
     assert decision["notes"] == "Expected an image data URL"
+    assert decision["simulated_cmd_vel"] == {
+        "linear_x": 0.0,
+        "angular_z": 0.0,
+        "duration_s": 0.0,
+    }
+
+
+def test_search_state_turns_in_place_when_no_candidate() -> None:
+    raw = _raw_decision()
+    raw["candidate_found"] = False
+    raw["confidence"] = 0.0
+    raw["target"] = {
+        "bearing": "unknown",
+        "range": "unknown",
+        "description": "",
+        "free_hand_evidence": "",
+        "busy_signals": ["none"],
+    }
+    raw["safety"] = {"safe_to_approach": False, "stop_reason": "no target visible"}
+
+    decision = policy._normalize_decision(raw, policy.FetchPolicyConfig())
+
+    assert decision["state"] == "search"
+    assert decision["action"] == "search"
+    assert decision["line"] == ""
+    assert decision["simulated_cmd_vel"] == {
+        "linear_x": 0.0,
+        "angular_z": 0.35,
+        "duration_s": 0.8,
+    }
 
 
 def test_gemini_provider_uses_openai_compatible_endpoint(monkeypatch) -> None:

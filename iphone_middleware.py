@@ -76,6 +76,7 @@ logger = setup_logger()
 STATIC_DIR = Path(__file__).parent / "static"
 CAPTURE_DIR = STATIC_DIR / "captures"
 DEFAULT_PORT = 8455
+DEFAULT_OPENAI_TTS_MODEL = "gpt-4o-mini-tts"
 GO2_LIDAR_STARTUP_TIMEOUT_S = 12.0
 GO2_LIDAR_STALE_TIMEOUT_S = 8.0
 CONVERSATION_IDLE_TIMEOUT_S = 30.0
@@ -561,7 +562,7 @@ class FetchIphoneMiddleware:
         model: str | None = None,
         vision_provider: VisionProvider = "openai",
         tts_provider: TtsProvider = "gemini",
-        tts_model: str = "tts-1",
+        tts_model: str = DEFAULT_OPENAI_TTS_MODEL,
         tts_voice: str = "echo",
         enable_realtime: bool = False,
         realtime_model: str = DEFAULT_REALTIME_MODEL,
@@ -1205,7 +1206,7 @@ def _parse_args() -> argparse.Namespace:
         default="gemini",
         help="TTS provider. Gemini uses Live API for streaming voice.",
     )
-    parser.add_argument("--tts-model", default="tts-1", help="OpenAI TTS model.")
+    parser.add_argument("--tts-model", default=DEFAULT_OPENAI_TTS_MODEL, help="OpenAI TTS model.")
     parser.add_argument("--tts-voice", default="echo", help="TTS voice name (OpenAI or Gemini prebuilt).")
     parser.add_argument(
         "--enable-realtime",
