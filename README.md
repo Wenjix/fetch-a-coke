@@ -6,8 +6,7 @@
 
 **A vision-powered robot dog brand ambassador that trades ice-cold Cokes for opt-in beach photos.**
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-&nbsp;[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 &nbsp;[![Built with DimOS](https://img.shields.io/badge/Built_with-DimOS-ff2d78)](https://github.com/dimensionalOS/dimos)
 &nbsp;[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 &nbsp;[![Watch the demo](https://img.shields.io/badge/Watch-Demo-FF0000?logo=youtube&logoColor=white)](https://youtu.be/7-kzERfLwH0)
@@ -334,14 +333,13 @@ to execute the final physical print.
 
 ## 🧰 Built with
 
-[DimOS](https://github.com/dimensionalOS/dimos) is Dimensional's **open-source,
-agent-native operating system for robots** (Apache-2.0) — Fetch is built on it and
-runs on a **Unitree Go2 Air**, reusing DimOS primitives like Unitree WebRTC control,
-the teleop web/cert pattern, and LiDAR.
+We used [DimOS](https://github.com/dimensionalOS/dimos), Dimensional's **open-source,
+agent-native operating system for robots** (Apache-2.0), on a **Unitree Go2 Air** —
+for Unitree WebRTC control, the teleop web/cert pattern, and LiDAR.
 
-Fetch is a DimOS package (it lives at `dimos/experimental/fetch/` in the DimOS
-monorepo). This standalone `robodog-fetch` repo carries those Fetch files, imports
-them first (local-first), and pulls in DimOS as a pinned git dependency
+The Fetch code lives at `dimos/experimental/fetch/` in the DimOS monorepo. This
+standalone `robodog-fetch` repo carries those files, imports them first (local-first),
+and pulls in DimOS as a pinned git dependency
 (`requirements.txt`) for the framework pieces it doesn't vendor — so it runs on its
 own, or unchanged from the monorepo root via
 `python -m dimos.experimental.fetch.iphone_middleware`.
