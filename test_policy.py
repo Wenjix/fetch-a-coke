@@ -54,10 +54,10 @@ def test_missing_gemini_key_returns_default_without_client(monkeypatch) -> None:
 
 
 def test_config_uses_provider_aware_default_model() -> None:
-    assert policy.FetchPolicyConfig().model == policy.DEFAULT_OPENAI_VISION_MODEL
+    assert policy.FetchPolicyConfig().model == policy.DEFAULT_GEMINI_VISION_MODEL
     assert (
-        policy.FetchPolicyConfig(vision_provider="gemini").model
-        == policy.DEFAULT_GEMINI_VISION_MODEL
+        policy.FetchPolicyConfig(vision_provider="openai").model
+        == policy.DEFAULT_OPENAI_VISION_MODEL
     )
 
 
@@ -79,7 +79,7 @@ def test_extract_json_object_ignores_extra_braces_around_response() -> None:
 
 
 def test_invalid_image_url_returns_default_without_client(monkeypatch) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
 
     fetch_policy = policy.FetchPolicy()
 

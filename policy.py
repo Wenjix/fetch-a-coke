@@ -70,7 +70,7 @@ def _validate_model_for_provider(provider: VisionProvider, model: str) -> None:
 @dataclass(frozen=True)
 class FetchPolicyConfig:
     model: str | None = None
-    vision_provider: VisionProvider = "openai"
+    vision_provider: VisionProvider = "gemini"
     max_line_chars: int = 180
     request_timeout_s: float = DEFAULT_REQUEST_TIMEOUT_S
     max_retries: int = DEFAULT_MAX_RETRIES

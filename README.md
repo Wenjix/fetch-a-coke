@@ -4,7 +4,7 @@
 
 # Fetch
 
-**A robot dog that trades ice-cold Cokes for instant photos.**
+**A vision-powered robot dog brand ambassador that trades ice-cold Cokes for opt-in beach photos.**
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 &nbsp;[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -28,23 +28,26 @@
 
 ## 🐕 What it is
 
-Fetch is a Unitree Go2 Air robot dog that works a crowd like a tiny, soda-carrying
-street performer. It wanders, finds someone who looks relaxed and up for a moment
-of fun, trots over, cracks a joke about what it sees, and offers them a cold Coke
-from its back — all it asks in return is to take their photo.
+Fetch is a Unitree Go2 Air robot dog that turns a beach interaction into a branded
+mini-experience. It roams the sand, finds someone who appears available from visible
+context, trots over, waves, makes a personalized joke about the scene, and offers an
+ice-cold Coke from its back. If the guest accepts, Fetch coaches them into frame,
+takes an opt-in photo, and celebrates with a dance.
 
-Under the hood, a vision LLM "reads the room" on every camera frame and decides
-where to move, what to say, and when to take the shot. It runs as a single
-FastAPI + WebSocket server, so you can try the whole behavior from a phone browser
-**before any robot is involved**.
+Under the hood, a vision LLM "reads the room" on every camera frame and returns
+structured decisions: where to move, whether the person appears approachable, what to
+say, when to stop, and when the Coke-and-guest photo is framed correctly. It runs as
+a single FastAPI + WebSocket server, so you can try the whole behavior from a phone
+browser **before any robot is involved**.
 
 ## 📈 The opportunity
 
-Fetch is an autonomous **brand ambassador** and **mobile vendor** — here for Coca-Cola
-— that hands out product, creates a memorable branded moment, and walks away with the
-guest's photo. The longer-term vision: fleets of autonomous robot-dog vendors that roam
-the beach and **self-resupply** at beachside bars and vendors, or at dedicated
-autonomous resupply stations.
+Fetch is an autonomous **brand ambassador** and **mobile vendor**: a physical
+character that can distribute product, create a memorable interaction, and turn an
+ordinary handoff into an opt-in branded keepsake. In this demo, Fetch works as a
+Coca-Cola ambassador. The longer-term vision is a fleet of robot-dog vendors that roam
+beaches, parks, festivals, campuses, and resorts, then **self-resupply** at nearby
+vendors or dedicated autonomous stations.
 
 ## 🏖️ Why a beach?
 
@@ -70,8 +73,8 @@ question of fitting the Go2, not inventing new science.
 1. **Wakes up.** The dog runs its preflight (recovery stand → balance stand →
    joystick handoff) and starts looking around.
 2. **Reads the room.** It turns in place scanning for a good guest: someone
-   centered in frame, facing the dog, who looks chill, curious, playful, or just
-   thirsty. People glued to a phone, laptop, or meal read as "busy — skip."
+   centered in frame, facing the dog, and appearing available from visible cues.
+   People glued to a phone, laptop, or meal read as "busy — skip."
 3. **Approaches — carefully.** If the path looks clear, it walks over and stops
    once the person is within ~4 meters.
 4. **Breaks the ice.** It waves and delivers a personalized one-liner riffing on
@@ -104,15 +107,27 @@ motion / speech / photo decisions. Three camera sources plug into the same loop:
   depth to JavaScript.
 - **Live Unitree Go2** — WebRTC camera + LiDAR over the dog's Wi-Fi.
 
-## ⚡ Engineered to feel instant
+## ⚡ Engineered for live interaction
 
-The trade only lands if the interaction feels instant, so we did the UX-latency
-engineering to get there. We benchmarked real round-trip latency for every vision and
-speech model Fetch can use (`scripts/latency_bench.py`, hitting the live OpenAI / Gemini
-/ Cartesia APIs) and picked the fastest combination — **Gemini 2.5 Flash-Lite** for
-per-frame vision and **Cartesia Sonic** for speech. Camera frames are downscaled
-(≤640 px) and JPEG-compressed before they're sent for analysis, so uploads and inference
-stay quick, and the whole scan loop is tuned to land around one second.
+The interaction only works if the timing feels human. A joke that arrives two seconds
+late feels broken; a photo prompt that lags behind the guest's movement kills the
+moment. So Fetch treats latency as core UX, not backend plumbing.
+
+We benchmarked real round-trip latency across the vision and speech models Fetch can
+use (`scripts/latency_bench.py`, hitting the live OpenAI / Gemini / Cartesia APIs),
+including time-to-first-audio for streaming TTS. The live demo uses **Gemini 2.5
+Flash-Lite** for per-frame vision and **Cartesia Sonic** for low-latency speech.
+Camera frames are downscaled (≤640 px) and JPEG-compressed before they're sent for
+analysis, keeping uploads and inference quick enough for the scan loop to land around
+one second.
+
+The audio path is tuned for the same reason. The server reuses the Cartesia HTTP client
+to avoid a fresh TLS handshake on every line, supports runtime audio-provider switching
+from the phone UI, and can route speech through `/speak`, Gemini Live TTS, or optional
+OpenAI Realtime WebRTC depending on the demo setup. For two-way conversation, Fetch
+uses a persistent Gemini Live session with server-side voice activity detection,
+barge-in, tool calls, and camera feedback, so spoken coaching stays aligned with what
+the robot can actually see.
 
 ## 🚀 Quickstart (run it yourself)
 
@@ -163,11 +178,10 @@ python iphone_middleware.py \
   --robot-ip 192.168.12.1 --robot-connection-method local_ap
 ```
 
-Vision defaults to OpenAI `gpt-5-mini`; `--vision-provider gemini` uses
-`gemini-3.5-flash` through Gemini's OpenAI-compatible API (no LangChain). For the
-lowest latency, our live demo runs vision on **Gemini 2.5 Flash-Lite**
-(`--vision-provider gemini --model gemini-2.5-flash-lite`). Use `--no-ssl` for quick
-local debugging.
+Vision defaults to **Gemini `gemini-3.5-flash`** through Gemini's OpenAI-compatible API
+(no LangChain); pass `--vision-provider openai` to use OpenAI `gpt-5-mini` instead. For
+the lowest latency, our live demo runs vision on **Gemini 2.5 Flash-Lite**
+(`--model gemini-2.5-flash-lite`). Use `--no-ssl` for quick local debugging.
 
 ## 💬 Voice & conversation
 
