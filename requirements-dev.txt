@@ -1,0 +1,12 @@
+# Dependencies to run the test suite (`pytest -q`).
+#
+# The tests stub out DimOS, cv2, and the Unitree transport (see the module setup in
+# test_iphone_middleware.py), so the suite runs WITHOUT installing DimOS — no
+# from-source native build needed. This file therefore does NOT include
+# requirements.txt; it lists only the libraries the local modules import for real.
+pytest
+fastapi          # app under test + fastapi.testclient.TestClient
+httpx            # required by Starlette/FastAPI TestClient
+python-dotenv    # imported at module load by iphone_middleware
+numpy            # imported at module load by iphone_middleware
+openai           # imported at module load by policy / iphone_middleware

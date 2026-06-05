@@ -34,26 +34,40 @@ import numpy as np
 from openai import OpenAI
 from unitree_webrtc_connect.constants import RTC_TOPIC
 
-from dimos.experimental.fetch.policy import (
-    DEFAULT_GEMINI_VISION_MODEL,
-    DEFAULT_MAX_RETRIES,
-    DEFAULT_OPENAI_VISION_MODEL,
-    DEFAULT_REQUEST_TIMEOUT_S,
-    FetchPolicy,
-    FetchPolicyConfig,
-    VisionProvider,
-)
-from dimos.experimental.fetch.record3d_source import Record3DSource
 try:
-    from dimos.experimental.fetch.tts import (
+    from policy import (
+        DEFAULT_GEMINI_VISION_MODEL,
+        DEFAULT_MAX_RETRIES,
+        DEFAULT_OPENAI_VISION_MODEL,
+        DEFAULT_REQUEST_TIMEOUT_S,
+        FetchPolicy,
+        FetchPolicyConfig,
+        VisionProvider,
+    )
+except ModuleNotFoundError:  # fallback: running inside the DimOS monorepo
+    from dimos.experimental.fetch.policy import (  # type: ignore[no-redef]
+        DEFAULT_GEMINI_VISION_MODEL,
+        DEFAULT_MAX_RETRIES,
+        DEFAULT_OPENAI_VISION_MODEL,
+        DEFAULT_REQUEST_TIMEOUT_S,
+        FetchPolicy,
+        FetchPolicyConfig,
+        VisionProvider,
+    )
+try:
+    from record3d_source import Record3DSource
+except ModuleNotFoundError:  # fallback: running inside the DimOS monorepo
+    from dimos.experimental.fetch.record3d_source import Record3DSource  # type: ignore[no-redef]
+try:
+    from tts import (
         DEFAULT_GEMINI_TTS_MODEL,
         TtsProvider,
         cartesia_tts,
         gemini_live_tts,
         map_voice,
     )
-except ModuleNotFoundError:
-    from tts import (  # type: ignore[no-redef]
+except ModuleNotFoundError:  # fallback: running inside the DimOS monorepo
+    from dimos.experimental.fetch.tts import (  # type: ignore[no-redef]
         DEFAULT_GEMINI_TTS_MODEL,
         TtsProvider,
         cartesia_tts,
@@ -61,9 +75,9 @@ except ModuleNotFoundError:
         map_voice,
     )
 try:
-    from dimos.experimental.fetch.conversation import LiveConversationSession
-except ModuleNotFoundError:
-    from conversation import LiveConversationSession  # type: ignore[no-redef]
+    from conversation import LiveConversationSession
+except ModuleNotFoundError:  # fallback: running inside the DimOS monorepo
+    from dimos.experimental.fetch.conversation import LiveConversationSession  # type: ignore[no-redef]
 from dimos.msgs.geometry_msgs.Twist import Twist
 from dimos.msgs.geometry_msgs.Vector3 import Vector3
 from dimos.msgs.sensor_msgs.Image import Image

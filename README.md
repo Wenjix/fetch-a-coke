@@ -105,16 +105,25 @@ stay quick, and the whole scan loop is tuned to land around one second.
 
 ## Quickstart (run it yourself)
 
-> **Prerequisite:** Fetch lives in the DimOS monorepo at `dimos/experimental/fetch/`
-> and imports DimOS modules, so run it from the monorepo root (the package must be on
-> your `PYTHONPATH`). Set whichever provider keys you'll use in `.env`:
-> `OPENAI_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `CARTESIA_API_KEY`.
+> **Setup:** this repo ships the Fetch code; DimOS supplies the framework pieces it
+> imports (robot transport, message types, web server). DimOS is pinned to a **git
+> commit** — the published PyPI release predates the web API this code uses — and it
+> builds from source, so a C/C++ (and Rust) toolchain is required to install.
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Set whichever provider keys you'll use in `.env`: `OPENAI_API_KEY`, `GEMINI_API_KEY`
+(or `GOOGLE_API_KEY`), `CARTESIA_API_KEY`. Already running inside the DimOS monorepo?
+Skip the install, keep the package on your `PYTHONPATH`, and run the commands below as
+`python -m dimos.experimental.fetch.iphone_middleware` instead of `python iphone_middleware.py`.
 
 **1. No hardware — phone or laptop browser camera:**
 
 ```bash
-# from the DimOS monorepo root
-python -m dimos.experimental.fetch.iphone_middleware --host 0.0.0.0 --port 8455
+python iphone_middleware.py --host 0.0.0.0 --port 8455
 ```
 
 Open `https://127.0.0.1:8455/fetch` and tap **Record** to start the ~1-second scan
@@ -127,13 +136,13 @@ default) or the browser blocks the camera/mic.
 
 ```bash
 # start Record3D with USB streaming enabled and the red record toggle on, then:
-python -m dimos.experimental.fetch.iphone_middleware --host 0.0.0.0 --port 8455 --record3d
+python iphone_middleware.py --host 0.0.0.0 --port 8455 --record3d
 ```
 
 **3. Live Unitree Go2 on the dog's Wi-Fi:**
 
 ```bash
-python -m dimos.experimental.fetch.iphone_middleware \
+python iphone_middleware.py \
   --host 0.0.0.0 --port 8455 \
   --vision-provider gemini \
   --robot-ip 192.168.12.1 --robot-connection-method local_ap
@@ -171,7 +180,7 @@ server-side voice activity detection. The model drives the dog through tool call
 framing is fed back in as hints so the spoken coaching matches what the camera sees.
 
 ```bash
-python -m dimos.experimental.fetch.iphone_middleware \
+python iphone_middleware.py \
   --host 0.0.0.0 --port 8455 \
   --vision-provider gemini --conversation-mode gemini_live \
   --robot-ip 192.168.12.1 --robot-connection-method local_ap
@@ -291,9 +300,10 @@ to execute the final physical print.
 Fetch is a DimOS package: it lives at `dimos/experimental/fetch/` in the
 [DimOS](https://github.com/dimensionalOS/dimos) monorepo and reuses DimOS primitives
 (Unitree WebRTC control, the teleop web/cert pattern, LiDAR). This standalone
-`robodog-fetch` repo mirrors those files so the behavior can be developed and tested
-on its own; the `python -m dimos.experimental.fetch.iphone_middleware` commands run
-from the monorepo root.
+`robodog-fetch` repo carries those Fetch files and imports them first (local-first),
+pulling in DimOS itself as a pinned git dependency (`requirements.txt`) for the
+framework pieces it doesn't vendor — so it runs on its own, or unchanged from the
+monorepo root via `python -m dimos.experimental.fetch.iphone_middleware`.
 
 ## What's next
 
