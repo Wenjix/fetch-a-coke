@@ -6,7 +6,7 @@
 
 **A robot dog that trades ice-cold Cokes for instant photos.**
 
-[Demo video](https://www.youtube.com/watch?v=8hHYE1239wg) · [Quickstart](#quickstart-run-it-yourself) · [How it works](#how-it-works-at-a-glance) · [Technical reference](#technical-reference)
+[Demo video](https://youtu.be/7-kzERfLwH0) · [Quickstart](#quickstart-run-it-yourself) · [How it works](#how-it-works-at-a-glance) · [Technical reference](#technical-reference)
 
 </div>
 
@@ -14,7 +14,7 @@
 
 ## What it is
 
-Fetch is a Unitree Go2 robot dog that works a crowd like a tiny, soda-carrying
+Fetch is a Unitree Go2 Air robot dog that works a crowd like a tiny, soda-carrying
 street performer. It wanders, finds someone who looks relaxed and up for a moment
 of fun, trots over, cracks a joke about what it sees, and offers them a cold Coke
 from its back — all it asks in return is to take their photo.
@@ -295,15 +295,29 @@ to execute the final physical print.
 
 </details>
 
-## Built on DimOS
+## Built with
 
-Fetch is a DimOS package: it lives at `dimos/experimental/fetch/` in the
-[DimOS](https://github.com/dimensionalOS/dimos) monorepo and reuses DimOS primitives
-(Unitree WebRTC control, the teleop web/cert pattern, LiDAR). This standalone
-`robodog-fetch` repo carries those Fetch files and imports them first (local-first),
-pulling in DimOS itself as a pinned git dependency (`requirements.txt`) for the
-framework pieces it doesn't vendor — so it runs on its own, or unchanged from the
-monorepo root via `python -m dimos.experimental.fetch.iphone_middleware`.
+[DimOS](https://github.com/dimensionalOS/dimos) is Dimensional's **open-source,
+agent-native operating system for robots** (Apache-2.0) — Fetch is built on it and
+runs on a **Unitree Go2 Air**, reusing DimOS primitives like Unitree WebRTC control,
+the teleop web/cert pattern, and LiDAR.
+
+Fetch is a DimOS package (it lives at `dimos/experimental/fetch/` in the DimOS
+monorepo). This standalone `robodog-fetch` repo carries those Fetch files, imports
+them first (local-first), and pulls in DimOS as a pinned git dependency
+(`requirements.txt`) for the framework pieces it doesn't vendor — so it runs on its
+own, or unchanged from the monorepo root via
+`python -m dimos.experimental.fetch.iphone_middleware`.
+
+| Layer | What we used |
+|---|---|
+| **Robot OS** | [DimOS](https://github.com/dimensionalOS/dimos) — open-source, agent-native robotics OS (Apache-2.0) |
+| **Robot** | Unitree Go2 Air quadruped |
+| **Sensors** | Go2 WebRTC camera + LiDAR · iPhone LiDAR via Record3D |
+| **Vision** | OpenAI `gpt-5-mini` · Google Gemini Flash |
+| **Voice** | Cartesia Sonic · Google Gemini Live · OpenAI TTS / Realtime |
+| **Server / UI** | FastAPI + WebSocket (DimOS teleop web pattern) |
+| **Output** | Xiaomi instant mini-printer |
 
 ## What's next
 
