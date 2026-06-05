@@ -30,24 +30,24 @@ import logging
 from typing import Any, Awaitable, Callable
 
 try:
-    from dimos.experimental.fetch.tts import (
+    from tts import (
         DEFAULT_GEMINI_TTS_MODEL,
         _gemini_api_key,
         map_voice,
     )
-except ModuleNotFoundError:
-    from tts import (  # type: ignore[no-redef]
+except ModuleNotFoundError:  # fallback: running inside the DimOS monorepo
+    from dimos.experimental.fetch.tts import (  # type: ignore[no-redef]
         DEFAULT_GEMINI_TTS_MODEL,
         _gemini_api_key,
         map_voice,
     )
 try:
-    from dimos.experimental.fetch.conversation_prompt import (
+    from conversation_prompt import (
         build_system_instruction,
         build_tools,
     )
-except ModuleNotFoundError:
-    from conversation_prompt import (  # type: ignore[no-redef]
+except ModuleNotFoundError:  # fallback: running inside the DimOS monorepo
+    from dimos.experimental.fetch.conversation_prompt import (  # type: ignore[no-redef]
         build_system_instruction,
         build_tools,
     )

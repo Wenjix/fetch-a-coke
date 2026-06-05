@@ -1,0 +1,30 @@
+# Runtime dependencies for the Fetch Coke middleware.
+#
+# DimOS supplies the framework pieces this app imports but does NOT vendor:
+#   dimos.msgs.*                              (Twist, Vector3, Image, PointCloud2)
+#   dimos.robot.unitree.connection            (UnitreeWebRTCConnection)
+#   dimos.utils.*                             (logging_config, path_utils)
+#   dimos.web.dimos_interface.api.server      (FastAPIServer)
+# The Fetch logic itself (policy / tts / conversation / conversation_prompt /
+# record3d_source / iphone_middleware) lives in THIS repo and is imported locally
+# (local-first, see iphone_middleware.py) — DimOS is only the framework dependency.
+#
+# Pinned to a DimOS *git commit*, not a PyPI release, on purpose:
+#   - The published `dimos` sdist (0.0.12.post2) predates
+#     `dimos.web.dimos_interface.api.server`, so it would crash at the FastAPIServer
+#     import. That module only exists on the DimOS main branch.
+#   - DimOS ships source-only (no wheels) and has native (C++/Rust) components, so
+#     this builds from source — a C/C++ and Rust toolchain is required to install.
+# Repin <sha> to the exact DimOS commit your Fetch code targets if it differs.
+dimos[unitree,web] @ git+https://github.com/dimensionalOS/dimos.git@fab48b3a0ea3241e2456e19ea1a583e3bd1365a8
+
+# Direct third-party libraries the Fetch code imports (left unpinned so they defer
+# to whatever DimOS[base] constrains; pin if you need byte-for-byte reproducibility).
+fastapi          # HTTP + WebSocket app (iphone_middleware)
+python-dotenv    # .env loading (iphone_middleware)
+numpy            # frame / point-cloud math (iphone_middleware, record3d_source)
+opencv-python    # cv2 frame encoding + overlays (iphone_middleware, record3d_source)
+openai           # OpenAI vision, realtime, TTS (policy, iphone_middleware)
+google-genai     # Gemini vision / TTS / Live (tts, conversation) — imported lazily
+httpx            # Cartesia TTS REST client (tts) — imported lazily
+record3d         # iPhone LiDAR depth capture (--record3d only) — imported lazily

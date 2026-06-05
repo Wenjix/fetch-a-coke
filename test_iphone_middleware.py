@@ -104,6 +104,9 @@ _module(
     putText=lambda *_args, **_kwargs: None,
 )
 _module("dimos.experimental.fetch.record3d_source", Record3DSource=_Record3DSource)
+# iphone_middleware imports record3d_source local-first; stub the local name too so
+# tests never touch the real (hardware-bound) Record3DSource.
+_module("record3d_source", Record3DSource=_Record3DSource)
 _module(
     "dimos.msgs.geometry_msgs.Twist",
     Twist=lambda **kwargs: SimpleNamespace(**kwargs),
