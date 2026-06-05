@@ -602,7 +602,7 @@ class FetchIphoneMiddleware:
         host: str = "0.0.0.0",
         port: int = DEFAULT_PORT,
         model: str | None = None,
-        vision_provider: VisionProvider = "openai",
+        vision_provider: VisionProvider = "gemini",
         tts_provider: TtsProvider = "cartesia",
         tts_model: str = DEFAULT_OPENAI_TTS_MODEL,
         tts_voice: str = "echo",
@@ -1274,8 +1274,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--vision-provider",
         choices=("openai", "gemini"),
-        default="openai",
-        help="Provider for image analysis.",
+        default="gemini",
+        help="Provider for image analysis (default: gemini).",
     )
     parser.add_argument(
         "--tts-provider",

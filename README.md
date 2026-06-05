@@ -178,11 +178,10 @@ python iphone_middleware.py \
   --robot-ip 192.168.12.1 --robot-connection-method local_ap
 ```
 
-Vision defaults to OpenAI `gpt-5-mini`; `--vision-provider gemini` uses
-`gemini-3.5-flash` through Gemini's OpenAI-compatible API (no LangChain). For the
-lowest latency, our live demo runs vision on **Gemini 2.5 Flash-Lite**
-(`--vision-provider gemini --model gemini-2.5-flash-lite`). Use `--no-ssl` for quick
-local debugging.
+Vision defaults to **Gemini `gemini-3.5-flash`** through Gemini's OpenAI-compatible API
+(no LangChain); pass `--vision-provider openai` to use OpenAI `gpt-5-mini` instead. For
+the lowest latency, our live demo runs vision on **Gemini 2.5 Flash-Lite**
+(`--model gemini-2.5-flash-lite`). Use `--no-ssl` for quick local debugging.
 
 ## 💬 Voice & conversation
 

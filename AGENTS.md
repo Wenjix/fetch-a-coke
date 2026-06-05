@@ -24,9 +24,9 @@ python -m dimos.experimental.fetch.iphone_middleware \
 # Disable HTTPS for local debugging:
 python -m dimos.experimental.fetch.iphone_middleware --host 0.0.0.0 --port 8455 --no-ssl
 
-# Use Gemini vision instead of OpenAI:
-export GEMINI_API_KEY=<KEY>
-python -m dimos.experimental.fetch.iphone_middleware --host 0.0.0.0 --port 8455 --vision-provider gemini
+# Use OpenAI vision instead of the Gemini default:
+export OPENAI_API_KEY=<KEY>
+python -m dimos.experimental.fetch.iphone_middleware --host 0.0.0.0 --port 8455 --vision-provider openai
 
 # Use Gemini Live TTS as the primary browser audio route:
 export GEMINI_API_KEY=<KEY>
