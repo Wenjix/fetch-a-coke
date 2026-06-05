@@ -1,18 +1,32 @@
 <div align="center">
 
-<img src="static/logo.png" alt="Fetch" width="240" />
+<img src="static/logo.png" alt="Fetch" width="200" />
 
 # Fetch
 
 **A robot dog that trades ice-cold Cokes for instant photos.**
 
-[Demo video](https://youtu.be/7-kzERfLwH0) · [Quickstart](#quickstart-run-it-yourself) · [How it works](#how-it-works-at-a-glance) · [Technical reference](#technical-reference)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+&nbsp;[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+&nbsp;[![Built with DimOS](https://img.shields.io/badge/Built_with-DimOS-ff2d78)](https://github.com/dimensionalOS/dimos)
+&nbsp;[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+&nbsp;[![Watch the demo](https://img.shields.io/badge/Watch-Demo-FF0000?logo=youtube&logoColor=white)](https://youtu.be/7-kzERfLwH0)
+
+<br/>
+
+[<img src="static/idle-camera-feed.png" alt="Fetch — a Unitree Go2 Air robot dog carrying Cokes on a beach" width="760" />](https://youtu.be/7-kzERfLwH0)
+
+<sub>▶ Click the image to watch the demo</sub>
+
+<br/>
+
+[🚀 Quickstart](#-quickstart-run-it-yourself) · [🧠 How it works](#-how-it-works-at-a-glance) · [💬 Voice](#-voice--conversation) · [🧰 Built with](#-built-with) · [🔧 Technical reference](#-technical-reference)
 
 </div>
 
 ---
 
-## What it is
+## 🐕 What it is
 
 Fetch is a Unitree Go2 Air robot dog that works a crowd like a tiny, soda-carrying
 street performer. It wanders, finds someone who looks relaxed and up for a moment
@@ -24,7 +38,7 @@ where to move, what to say, and when to take the shot. It runs as a single
 FastAPI + WebSocket server, so you can try the whole behavior from a phone browser
 **before any robot is involved**.
 
-## The opportunity
+## 📈 The opportunity
 
 Fetch is an autonomous **brand ambassador** and **mobile vendor** — here for Coca-Cola
 — that hands out product, creates a memorable branded moment, and walks away with the
@@ -32,7 +46,7 @@ guest's photo. The longer-term vision: fleets of autonomous robot-dog vendors th
 the beach and **self-resupply** at beachside bars and vendors, or at dedicated
 autonomous resupply stations.
 
-## Why a beach?
+## 🏖️ Why a beach?
 
 We started by brainstorming where a quadruped earns its keep, and kept landing on the
 one thing robot dogs do that wheeled robots can't: **handle terrain**. So we framed
@@ -51,7 +65,7 @@ adaptations](https://www.popsci.com/technology/robot-moose/) — moose-inspired 
 — cut foot sinkage ~46% and walking energy up to ~70%. A real beach deployment is a
 question of fitting the Go2, not inventing new science.
 
-## The experience
+## 🎬 The experience
 
 1. **Wakes up.** The dog runs its preflight (recovery stand → balance stand →
    joystick handoff) and starts looking around.
@@ -71,17 +85,14 @@ question of fitting the Go2, not inventing new science.
 Fetch's comedy voice is confessional, observational, self-deprecating, and mildly
 exasperated by the absurdity of being a tiny robot dog hauling soda around a beach.
 
-## How it works (at a glance)
+## 🧠 How it works (at a glance)
 
-```
-  camera frame                vision LLM                 decision                 act
- ┌────────────┐   image    ┌────────────┐   JSON    ┌────────────────┐       ┌──────────┐
- │  phone cam │──(+depth)──▶│  OpenAI /  │──────────▶│ state, cmd_vel,│──────▶│ move Go2 │
- │  Record3D  │            │   Gemini   │           │ line, photo?   │       │ speak    │
- │  live Go2  │            └────────────┘           └────────────────┘       │ snap photo│
- └────────────┘                                                              └──────────┘
-        ▲                                                                          │
-        └──────────────────────── ~1s scan loop ──────────────────────────────────┘
+```mermaid
+flowchart LR
+    A["📷 Camera frame<br/>phone cam · Record3D · live Go2"] -->|image + depth| B["🧠 Vision LLM<br/>OpenAI / Gemini"]
+    B -->|JSON decision| C["🎯 Decision<br/>state · cmd_vel · line · photo?"]
+    C --> D["🤖 Act<br/>move Go2 · speak · snap photo"]
+    D -.->|~1s scan loop| A
 ```
 
 Fetch reuses the **DimOS teleop web pattern**: a FastAPI server serves an HTTPS
@@ -93,7 +104,7 @@ motion / speech / photo decisions. Three camera sources plug into the same loop:
   depth to JavaScript.
 - **Live Unitree Go2** — WebRTC camera + LiDAR over the dog's Wi-Fi.
 
-## Engineered to feel instant
+## ⚡ Engineered to feel instant
 
 The trade only lands if the interaction feels instant, so we did the UX-latency
 engineering to get there. We benchmarked real round-trip latency for every vision and
@@ -103,8 +114,9 @@ per-frame vision and **Cartesia Sonic** for speech. Camera frames are downscaled
 (≤640 px) and JPEG-compressed before they're sent for analysis, so uploads and inference
 stay quick, and the whole scan loop is tuned to land around one second.
 
-## Quickstart (run it yourself)
+## 🚀 Quickstart (run it yourself)
 
+> [!IMPORTANT]
 > **Setup:** this repo ships the Fetch code; DimOS supplies the framework pieces it
 > imports (robot transport, message types, web server). DimOS is pinned to a **git
 > commit** — the published PyPI release predates the web API this code uses — and it
@@ -119,6 +131,9 @@ Set whichever provider keys you'll use in `.env`: `OPENAI_API_KEY`, `GEMINI_API_
 (or `GOOGLE_API_KEY`), `CARTESIA_API_KEY`. Already running inside the DimOS monorepo?
 Skip the install, keep the package on your `PYTHONPATH`, and run the commands below as
 `python -m dimos.experimental.fetch.iphone_middleware` instead of `python iphone_middleware.py`.
+
+> [!TIP]
+> No robot required — start here with just a phone or laptop browser camera.
 
 **1. No hardware — phone or laptop browser camera:**
 
@@ -154,7 +169,7 @@ lowest latency, our live demo runs vision on **Gemini 2.5 Flash-Lite**
 (`--vision-provider gemini --model gemini-2.5-flash-lite`). Use `--no-ssl` for quick
 local debugging.
 
-## Voice & conversation
+## 💬 Voice & conversation
 
 Fetch can either **talk at** people (one-way TTS) or **talk with** them (two-way).
 
@@ -195,26 +210,34 @@ python3 scripts/latency_bench.py            # 3 runs each
 python3 scripts/latency_bench.py --runs 5
 ```
 
-## Safety & privacy
+## 🔒 Safety & privacy
 
 - **No identity or sensitive-trait inference.** Humor is constrained to *visible,
   non-sensitive context* — setting, posture, lighting, colors, nearby objects, what's
   happening in the scene.
 - **Obstacle-aware approach.** It only moves when the path looks safe and uses
   LiDAR/depth for the final `<4m` stop.
-- **Local-demo auth caveat.** `/realtime/client-secret` is intentionally
-  unauthenticated for local live demos and is disabled by default. Add an access gate
-  before exposing this server on a shared or public network.
+> [!WARNING]
+> **Local-demo auth caveat:** `/realtime/client-secret` is intentionally
+> unauthenticated for local live demos and is disabled by default. Add an access gate
+> before exposing this server on a shared or public network.
 
-## Technical reference
+## 🔧 Technical reference
 
 <details>
 <summary><b>State machine & interaction phases</b></summary>
 
-```
-search → approach → greet → wait_for_coke → photo_ready
-  ↑                                              │
-  └──────────────── skip ◀───────────────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> search
+    search --> approach: candidate found
+    approach --> greet: within 4 m
+    greet --> wait_for_coke: offer made
+    wait_for_coke --> photo_ready: Coke + person framed
+    photo_ready --> search: photo taken → dance
+    search --> skip: unsafe / blocked
+    approach --> skip: unsafe / blocked
+    skip --> search
 ```
 
 - **search** — scan left/right (`angular_z != 0`) for a candidate.
@@ -295,7 +318,7 @@ to execute the final physical print.
 
 </details>
 
-## Built with
+## 🧰 Built with
 
 [DimOS](https://github.com/dimensionalOS/dimos) is Dimensional's **open-source,
 agent-native operating system for robots** (Apache-2.0) — Fetch is built on it and
@@ -319,7 +342,7 @@ own, or unchanged from the monorepo root via
 | **Server / UI** | FastAPI + WebSocket (DimOS teleop web pattern) |
 | **Output** | Xiaomi instant mini-printer |
 
-## What's next
+## 🗺️ What's next
 
 - **Sense the trade, don't just see it.** The Unitree Go2 EDU carries [foot-end force
   sensors](https://www.unitree.com/go2/foot/) (one per foot). Lifting a ~350 g Coke off
@@ -329,7 +352,7 @@ own, or unchanged from the monorepo root via
 - **Take it to real sand.** Fit the Go2 with the sand-walking foot adaptations above for
   an outdoor beach deployment beyond the indoor / handheld-camera demo.
 
-## Tests
+## 🧪 Tests
 
 ```bash
 pytest -q            # all tests; providers are mocked — no real API calls
